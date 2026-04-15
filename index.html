@@ -1108,7 +1108,6 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 
 
 <script>
-<script>
 
 // ═══ CONSTANTS ═══
 const ML_DEFAULTS = new Set([
@@ -2403,33 +2402,6 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
 
 
 
-// ═══ BOOT ═══
-// Expose helpers for Firebase module (inventory/changeLog/transactions already bound via var)
-window.RAW=RAW;
-window.ML_DEFAULTS=ML_DEFAULTS;
-window.updateBadges=updateBadges;
-window.applyFilters=applyFilters;
-window.findItems=findItems;
-window.findBySku=findBySku;
-window.getSkus=getSkus;
-window.calcTotal=calcTotal;
-window.getFefo=getFefo;
-window.logChange=logChange;
-window.saveAll=saveAll;
-// localFallbackBoot seeds from RAW if Firebase unreachable
-window.localFallbackBoot=function(){
-  if(!inventory.length){
-    const seeded=RAW.map((r,i)=>migrateLocal(r,i));
-    seeded.forEach(r=>window.inventory.push(r));
-  }
-  updateBadges();applyFilters();
-};
-function migrateLocal(r,i){
-  return {...r,id:i+1,notes:r.notes||'',expiry:r.expiry||'',
-    skus:r.sku?[r.sku].filter(Boolean):[],
-    lotNums:[],lotDetails:[],
-    quantity:parseFloat(r.quantity)||0};
-}
 </script>
 </div><!-- /mainApp -->
 </body>
