@@ -11,6 +11,12 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
 (function(){
+if(typeof firebase==='undefined'){
+  document.addEventListener('DOMContentLoaded',function(){
+    var ls=document.getElementById('loginScreen');
+    if(ls)ls.innerHTML='<div style="color:#fff;text-align:center;padding:40px;max-width:400px"><h2>Connection Required</h2><p style="margin-top:12px;opacity:.8">This app must be opened from a web server (Vercel) not a local file. Please deploy to Vercel and open the Vercel URL.</p></div>';
+  });return;
+}
 var cfg={apiKey:"AIzaSyCC3k6i9ADfkhUOusGv_EvvO5PxcuIFgtc",authDomain:"plessen-inventory.firebaseapp.com",projectId:"plessen-inventory",storageBucket:"plessen-inventory.firebasestorage.app",messagingSenderId:"704212184885",appId:"1:704212184885:web:6e094e9ddd5573850ae67c"};
 if(!firebase.apps.length)firebase.initializeApp(cfg);
 var db=firebase.firestore();
@@ -1779,10 +1785,10 @@ function closeItemModal(){document.getElementById('itemModal').classList.remove(
 
 function renderTagList(containerId, arr, type){
   const el=document.getElementById(containerId);if(!el)return;
-  el.innerHTML=arr.length===0?'<span style="color:var(--text3);font-size:12px">None added yet</span>':
-    arr.map((v,i)=>'<span class="tag">'+v+'<span class="tx" data-t="'+type+'" data-i="'+i+'">×</span></span>').join('');
+  if(!arr.length){el.innerHTML='<span style="color:var(--text3);font-size:12px">None added yet</span>';return;}
+  el.innerHTML=arr.map((v,i)=>'<span class="tag">'+escH(v)+'<span class="tx" data-t="'+type+'" data-i="'+i+'">×</span></span>').join('');
+  el.querySelectorAll('span.tx').forEach(function(x){x.onclick=function(){removeItemTag(this.dataset.t,+this.dataset.i);};});
 }
-  el.querySelectorAll("span.tx").forEach(function(x){x.onclick=function(){removeItemTag(this.dataset.t,+this.dataset.i);};});
 function removeItemTag(type,idx){
   if(type==='sku'){fSkus.splice(idx,1);renderTagList('f-skus-display',fSkus,'sku');}
   else{fLots.splice(idx,1);renderTagList('f-lots-display',fLots,'lot');}
