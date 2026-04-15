@@ -5,128 +5,125 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Plessen Ophthalmology — Clinical Inventory</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<!-- Firebase -->
-<script type="module">
-import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import{getFirestore,doc,setDoc,getDoc,onSnapshot}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-import{getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged,setPersistence,browserLocalPersistence}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-const app=initializeApp({apiKey:"AIzaSyCC3k6i9ADfkhUOusGv_EvvO5PxcuIFgtc",authDomain:"plessen-inventory.firebaseapp.com",projectId:"plessen-inventory",storageBucket:"plessen-inventory.firebasestorage.app",messagingSenderId:"704212184885",appId:"1:704212184885:web:6e094e9ddd5573850ae67c"});
-const db=getFirestore(app),auth=getAuth(app);
-setPersistence(auth,browserLocalPersistence).catch(()=>{});
-function setSyncStatus(s){
-  const el=document.getElementById('syncStatus'),dot=document.getElementById('syncDot');if(!el)return;
-  const m={loading:{t:'Loading…',c:'#60a5fa',a:true},saving:{t:'Saving…',c:'#fbbf24',a:true},synced:{t:'Synced',c:'#34d399',a:false},error:{t:'Offline',c:'#f87171',a:false}};
-  const st=m[s]||m.synced;el.textContent=st.t;dot.style.background=st.c;dot.style.animation=st.a?'pulse2 1s infinite':'none';
+<!-- Firebase compat SDKs - official CDN -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+var cfg={apiKey:"AIzaSyCC3k6i9ADfkhUOusGv_EvvO5PxcuIFgtc",authDomain:"plessen-inventory.firebaseapp.com",projectId:"plessen-inventory",storageBucket:"plessen-inventory.firebasestorage.app",messagingSenderId:"704212184885",appId:"1:704212184885:web:6e094e9ddd5573850ae67c"};
+if(!firebase.apps.length)firebase.initializeApp(cfg);
+var db=firebase.firestore();
+var auth=firebase.auth();
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){});
+
+function setSS(s){
+  var el=document.getElementById('syncStatus'),dot=document.getElementById('syncDot');if(!el)return;
+  var m={loading:{t:'Loading...',c:'#60a5fa',a:true},saving:{t:'Saving...',c:'#fbbf24',a:true},synced:{t:'Synced',c:'#34d399',a:false},error:{t:'Offline',c:'#f87171',a:false}};
+  var st=m[s]||m.synced;el.textContent=st.t;dot.style.background=st.c;dot.style.animation=st.a?'pulse2 1s infinite':'none';
 }
-let _sq=null,_ru=false;
-window.fbSave=async function(){
-  if(!window._fbReady)return;setSyncStatus('saving');
-  try{
-    await Promise.all([
-      setDoc(doc(db,'plessen','inventory'),{data:JSON.stringify(window.inventory),ts:new Date().toISOString()}),
-      setDoc(doc(db,'plessen','changelog'),{data:JSON.stringify(window.changeLog),ts:new Date().toISOString()}),
-      setDoc(doc(db,'plessen','transactions'),{data:JSON.stringify(window.transactions),ts:new Date().toISOString()})
-    ]);
-    setSyncStatus('synced');
-  }catch(e){console.error('fbSave:',e);setSyncStatus('error');}
+
+var _sq=null,_ru=false;
+
+window.fbSave=function(){
+  if(!window._fbReady)return;setSS('saving');
+  Promise.all([
+    db.doc('plessen/inventory').set({data:JSON.stringify(window.inventory),ts:new Date().toISOString()}),
+    db.doc('plessen/changelog').set({data:JSON.stringify(window.changeLog),ts:new Date().toISOString()}),
+    db.doc('plessen/transactions').set({data:JSON.stringify(window.transactions),ts:new Date().toISOString()})
+  ]).then(function(){setSS('synced');}).catch(function(e){console.error('fbSave:',e);setSS('error');});
 };
-window.fbSaveDebounced=function(){setSyncStatus('saving');clearTimeout(_sq);_sq=setTimeout(window.fbSave,900);};
+window.fbSaveDebounced=function(){setSS('saving');clearTimeout(_sq);_sq=setTimeout(window.fbSave,900);};
+
 function migrateItem(r,i){
   if(!Array.isArray(r.skus))r.skus=r.sku?[r.sku.trim()].filter(Boolean):[];
   if(!Array.isArray(r.lotNums))r.lotNums=r.lot?[r.lot.trim()].filter(Boolean):[];
   if(!Array.isArray(r.lotDetails))r.lotDetails=[];
-  if(r.lotDetails.length===0&&r.quantity>0&&r.lot){
+  if(r.lotDetails.length===0&&r.quantity>0&&r.lot)
     r.lotDetails=[{lot:r.lot,qty:parseFloat(r.quantity)||0,expiry:r.expiry||'',received:'',vendor:r.vendor||'',price:parseFloat(r.price)||0,notes:''}];
-  }
   if(!r.id)r.id=i+1;
   delete r.multilot;
   return r;
 }
-async function fbLoad(){
-  setSyncStatus('loading');
-  try{
-    const[iv,cl,tx]=await Promise.all([getDoc(doc(db,'plessen','inventory')),getDoc(doc(db,'plessen','changelog')),getDoc(doc(db,'plessen','transactions'))]);
-    if(iv.exists()){
-      window.inventory=JSON.parse(iv.data().data).map(migrateItem);
+function mutArr(arr,data){arr.length=0;data.forEach(function(x){arr.push(x);});}
+
+function fbLoad(){
+  setSS('loading');
+  Promise.all([db.doc('plessen/inventory').get(),db.doc('plessen/changelog').get(),db.doc('plessen/transactions').get()])
+  .then(function(res){
+    var iv=res[0],cl=res[1],tx=res[2];
+    if(iv.exists){
+      mutArr(window.inventory,JSON.parse(iv.data().data).map(migrateItem));
     } else {
-      window.inventory=window.RAW.map((r,i)=>migrateItem({...r,id:i+1,notes:r.notes||'',expiry:r.expiry||''},i));
-      window.changeLog=[];window.transactions=[];
-      await window.fbSave();
+      var seeded=window.RAW.map(function(r,i){return migrateItem(Object.assign({},r,{id:i+1,notes:r.notes||'',expiry:r.expiry||''}),i);});
+      mutArr(window.inventory,seeded);
+      mutArr(window.changeLog,[]);
+      mutArr(window.transactions,[]);
+      window.fbSave();
     }
-    if(cl.exists())window.changeLog=JSON.parse(cl.data().data);
-    if(tx.exists())window.transactions=JSON.parse(tx.data().data);
-    let dirty=false;
-    window.inventory=window.inventory.map((r,i)=>{const before=JSON.stringify(r);const after=JSON.stringify(migrateItem(r,i));if(before!==after)dirty=true;return JSON.parse(after);});
-    if(dirty)await window.fbSave();
-    setSyncStatus('synced');window._fbReady=true;
-    window.updateBadges();window.applyFilters();
-    onSnapshot(doc(db,'plessen','inventory'),snap=>{
-      if(!snap.exists()||_ru)return;
-      const d=JSON.parse(snap.data().data).map(migrateItem);
+    if(cl.exists)mutArr(window.changeLog,JSON.parse(cl.data().data));
+    if(tx.exists)mutArr(window.transactions,JSON.parse(tx.data().data));
+    var dirty=false;
+    var mig=window.inventory.map(function(r,i){var b=JSON.stringify(r),a=JSON.stringify(migrateItem(Object.assign({},r),i));if(b!==a)dirty=true;return JSON.parse(a);});
+    mutArr(window.inventory,mig);
+    if(dirty)window.fbSave();
+    setSS('synced');window._fbReady=true;
+    if(window.updateBadges)window.updateBadges();
+    if(window.applyFilters)window.applyFilters();
+    // Listeners
+    db.doc('plessen/inventory').onSnapshot(function(snap){
+      if(!snap.exists||_ru)return;
+      var d=JSON.parse(snap.data().data).map(migrateItem);
       if(JSON.stringify(d)===JSON.stringify(window.inventory))return;
-      _ru=true;window.inventory=d;window.applyFilters();window.updateBadges();setSyncStatus('synced');
-      const t=document.getElementById('toast');if(t){t.textContent='🔄 Updated from another device';t.className='toast show';setTimeout(()=>t.classList.remove('show'),3000);}
-      setTimeout(()=>_ru=false,600);
+      _ru=true;mutArr(window.inventory,d);
+      if(window.applyFilters)window.applyFilters();
+      if(window.updateBadges)window.updateBadges();
+      setSS('synced');
+      var t=document.getElementById('toast');
+      if(t){t.textContent='Updated from another device';t.className='toast show';setTimeout(function(){t.classList.remove('show');},3000);}
+      setTimeout(function(){_ru=false;},600);
     });
-    onSnapshot(doc(db,'plessen','changelog'),snap=>{if(snap.exists()&&!_ru){const d=JSON.parse(snap.data().data);if(JSON.stringify(d)!==JSON.stringify(window.changeLog)){window.changeLog=d;window.updateBadges();}}});
-    onSnapshot(doc(db,'plessen','transactions'),snap=>{if(snap.exists()&&!_ru){const d=JSON.parse(snap.data().data);if(JSON.stringify(d)!==JSON.stringify(window.transactions))window.transactions=d;}});
-  }catch(e){console.error('fbLoad:',e);setSyncStatus('error');window.localFallbackBoot();}
+    db.doc('plessen/changelog').onSnapshot(function(snap){
+      if(!snap.exists||_ru)return;
+      var d=JSON.parse(snap.data().data);
+      if(JSON.stringify(d)!==JSON.stringify(window.changeLog)){mutArr(window.changeLog,d);if(window.updateBadges)window.updateBadges();}
+    });
+    db.doc('plessen/transactions').onSnapshot(function(snap){
+      if(!snap.exists||_ru)return;
+      var d=JSON.parse(snap.data().data);
+      if(JSON.stringify(d)!==JSON.stringify(window.transactions))mutArr(window.transactions,d);
+    });
+  }).catch(function(e){console.error('fbLoad:',e);setSS('error');if(window.localFallbackBoot)window.localFallbackBoot();});
 }
-onAuthStateChanged(auth,user=>{
-  const ls=document.getElementById('loginScreen'),ma=document.getElementById('mainApp'),lb=document.getElementById('logoutBtn');
+
+auth.onAuthStateChanged(function(user){
+  var ls=document.getElementById('loginScreen'),ma=document.getElementById('mainApp'),lb=document.getElementById('logoutBtn');
   if(user){
-    if(ls)ls.style.display='none';if(ma)ma.style.display='';if(lb)lb.style.display='flex';
-    document.getElementById('loginErr').textContent='';
+    if(ls)ls.style.display='none';
+    if(ma)ma.style.display='';
+    if(lb)lb.style.display='flex';
+    var errEl=document.getElementById('loginErr');if(errEl)errEl.textContent='';
     fbLoad();
-  }else{
-    if(ls)ls.style.display='flex';if(ma)ma.style.display='none';if(lb)lb.style.display='none';
+  } else {
+    if(ls)ls.style.display='flex';
+    if(ma)ma.style.display='none';
+    if(lb)lb.style.display='none';
     window._fbReady=false;
   }
 });
-window.doLogin=async function(){
-  const email=document.getElementById('loginEmail').value.trim();
-  const pass=document.getElementById('loginPass').value;
-  const err=document.getElementById('loginErr');
-  err.textContent='Signing in…';
-  try{await signInWithEmailAndPassword(auth,email,pass);}
-  catch(e){err.textContent=e.code==='auth/invalid-credential'||e.code==='auth/wrong-password'?'Incorrect email or password.':e.message;}
+
+window.doLogin=function(){
+  var email=document.getElementById('loginEmail').value.trim();
+  var pass=document.getElementById('loginPass').value;
+  var err=document.getElementById('loginErr');
+  err.textContent='Signing in...';
+  auth.signInWithEmailAndPassword(email,pass).catch(function(e){
+    err.textContent=(e.code==='auth/invalid-credential'||e.code==='auth/wrong-password')?'Incorrect email or password.':e.message;
+  });
 };
-window.doLogout=async function(){window._fbReady=false;await signOut(auth);};
+window.doLogout=function(){window._fbReady=false;auth.signOut();};
+})();
 </script>
-</head>
-<body>
-
-<!-- LOGIN SCREEN -->
-<div id="loginScreen" style="position:fixed;inset:0;background:#0d2d5e;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
-  <div style="background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 24px 64px rgba(0,0,0,.4)">
-    <div style="display:flex;align-items:center;gap:11px;margin-bottom:28px;justify-content:center">
-      <div style="width:42px;height:42px;background:linear-gradient(135deg,#1a5fb4,#0891b2);border-radius:10px;display:flex;align-items:center;justify-content:center">
-        <svg viewBox="0 0 36 36" fill="none" width="26" height="26"><ellipse cx="18" cy="18" rx="15" ry="10" stroke="white" stroke-width="2.2"/><circle cx="18" cy="18" r="5.5" fill="white"/><circle cx="18" cy="18" r="3" fill="#0d2d5e"/><circle cx="20" cy="16" r="1.2" fill="white"/></svg>
-      </div>
-      <div><div style="font-size:16px;font-weight:700;color:#0d2d5e">Plessen Ophthalmology</div><div style="font-size:11px;color:#8896a7;text-transform:uppercase;letter-spacing:.05em">Clinical Inventory</div></div>
-    </div>
-    <div style="margin-bottom:13px">
-      <label style="display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px">Email</label>
-      <input type="email" id="loginEmail" placeholder="clinic@email.com" autocomplete="username"
-        style="width:100%;padding:10px 12px;border:1px solid #dde3ec;border-radius:8px;font-size:14px;outline:none;color:#0f1923;background:#f0f4f8;box-sizing:border-box"
-        onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
-    </div>
-    <div style="margin-bottom:6px">
-      <label style="display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px">Password</label>
-      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
-        style="width:100%;padding:10px 12px;border:1px solid #dde3ec;border-radius:8px;font-size:14px;outline:none;color:#0f1923;background:#f0f4f8;box-sizing:border-box"
-        onkeydown="if(event.key==='Enter')window.doLogin()">
-    </div>
-    <div id="loginErr" style="color:#b91c1c;font-size:12px;min-height:18px;margin-bottom:6px;font-weight:500"></div>
-    <button onclick="window.doLogin()"
-      style="width:100%;padding:11px;background:#1a5fb4;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
-      Sign In
-    </button>
-  </div>
-</div>
-
-<!-- MAIN APP -->
-<div id="mainApp" style="display:none">
 <style>
 :root{
   --navy:#0d2d5e;--blue:#1a5fb4;--teal:#0891b2;
@@ -450,6 +447,41 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 .inv-snt:hover{color:var(--blue)}.inv-snt.active{color:var(--blue);border-bottom-color:var(--blue)}
 .inv-sub-page{display:none}.inv-sub-page.active{display:block}
 </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" style="position:fixed;inset:0;background:#0d2d5e;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:360px;box-shadow:0 24px 64px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;gap:11px;margin-bottom:28px;justify-content:center">
+      <div style="width:42px;height:42px;background:linear-gradient(135deg,#1a5fb4,#0891b2);border-radius:10px;display:flex;align-items:center;justify-content:center">
+        <svg viewBox="0 0 36 36" fill="none" width="26" height="26"><ellipse cx="18" cy="18" rx="15" ry="10" stroke="white" stroke-width="2.2"/><circle cx="18" cy="18" r="5.5" fill="white"/><circle cx="18" cy="18" r="3" fill="#0d2d5e"/><circle cx="20" cy="16" r="1.2" fill="white"/></svg>
+      </div>
+      <div><div style="font-size:16px;font-weight:700;color:#0d2d5e">Plessen Ophthalmology</div><div style="font-size:11px;color:#8896a7;text-transform:uppercase;letter-spacing:.05em">Clinical Inventory</div></div>
+    </div>
+    <div style="margin-bottom:13px">
+      <label style="display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px">Email</label>
+      <input type="email" id="loginEmail" placeholder="clinic@email.com" autocomplete="username"
+        style="width:100%;padding:10px 12px;border:1px solid #dde3ec;border-radius:8px;font-size:14px;outline:none;color:#0f1923;background:#f0f4f8;box-sizing:border-box"
+        onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+    </div>
+    <div style="margin-bottom:6px">
+      <label style="display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px">Password</label>
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
+        style="width:100%;padding:10px 12px;border:1px solid #dde3ec;border-radius:8px;font-size:14px;outline:none;color:#0f1923;background:#f0f4f8;box-sizing:border-box"
+        onkeydown="if(event.key==='Enter')window.doLogin()">
+    </div>
+    <div id="loginErr" style="color:#b91c1c;font-size:12px;min-height:18px;margin-bottom:6px;font-weight:500"></div>
+    <button onclick="window.doLogin()"
+      style="width:100%;padding:11px;background:#1a5fb4;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
+      Sign In
+    </button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" style="display:none">
+
 <div class="hdr">
   <div class="hdr-l">
     <div class="logo-box">
@@ -1263,7 +1295,13 @@ const REMOVAL_REASONS = {
 const SHARED_REASONS = new Set(['shared_stt','shared_oog']);
 
 // ═══ STATE ═══
-let inventory=[], changeLog=[], transactions=[], filtered=[];
+window.inventory=window.inventory||[];
+window.changeLog=window.changeLog||[];
+window.transactions=window.transactions||[];
+var inventory=window.inventory;
+var changeLog=window.changeLog;
+var transactions=window.transactions;
+let filtered=[];
 let currentPage=1, perPage=50, sortCol='item', sortDir=1;
 let editId=null, deleteId=null, editLotItemId=null, editLotIdx=null;
 let selectedIds=new Set();
@@ -1289,9 +1327,11 @@ function initInventory(){
   changeLog=[];transactions=[];saveAll();
 }
 function saveAll(){
-  try{localStorage.setItem('pI8',JSON.stringify(inventory));
-    localStorage.setItem('pL8',JSON.stringify(changeLog));
-    localStorage.setItem('pT8',JSON.stringify(transactions));}catch(e){}
+  try{
+    localStorage.setItem('pI8',JSON.stringify(window.inventory));
+    localStorage.setItem('pL8',JSON.stringify(window.changeLog));
+    localStorage.setItem('pT8',JSON.stringify(window.transactions));
+  }catch(e){}
   if(window.fbSaveDebounced)window.fbSaveDebounced();
 }
 function loadAll(){
@@ -2364,10 +2404,7 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
 
 
 // ═══ BOOT ═══
-// Firebase module handles boot after auth. localFallbackBoot is called if Firebase unreachable.
-window.inventory=inventory;
-window.changeLog=changeLog;
-window.transactions=transactions;
+// Expose helpers for Firebase module (inventory/changeLog/transactions already bound via var)
 window.RAW=RAW;
 window.ML_DEFAULTS=ML_DEFAULTS;
 window.updateBadges=updateBadges;
@@ -2377,6 +2414,22 @@ window.findBySku=findBySku;
 window.getSkus=getSkus;
 window.calcTotal=calcTotal;
 window.getFefo=getFefo;
+window.logChange=logChange;
+window.saveAll=saveAll;
+// localFallbackBoot seeds from RAW if Firebase unreachable
+window.localFallbackBoot=function(){
+  if(!inventory.length){
+    const seeded=RAW.map((r,i)=>migrateLocal(r,i));
+    seeded.forEach(r=>window.inventory.push(r));
+  }
+  updateBadges();applyFilters();
+};
+function migrateLocal(r,i){
+  return {...r,id:i+1,notes:r.notes||'',expiry:r.expiry||'',
+    skus:r.sku?[r.sku].filter(Boolean):[],
+    lotNums:[],lotDetails:[],
+    quantity:parseFloat(r.quantity)||0};
+}
 </script>
 </div><!-- /mainApp -->
 </body>
