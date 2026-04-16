@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Plessen Ophthalmology — Clinical Inventory</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <!-- Firebase compat SDKs - official CDN -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -32,12 +32,18 @@ function setSS(s){
 var _sq=null,_ru=false;
 
 window.fbSave=function(){
-  if(!window._fbReady)return;setSS('saving');
+  if(!window._fbReady){
+    // Queue the save - retry once Firebase is ready
+    clearTimeout(window._saveRetry);
+    window._saveRetry=setTimeout(window.fbSave,2000);
+    return;
+  }
+  setSS('saving');
   Promise.all([
     db.doc('plessen/inventory').set({data:JSON.stringify(window.inventory),ts:new Date().toISOString()}),
     db.doc('plessen/changelog').set({data:JSON.stringify(window.changeLog),ts:new Date().toISOString()}),
     db.doc('plessen/transactions').set({data:JSON.stringify(window.transactions),ts:new Date().toISOString()})
-  ]).then(function(){setSS('synced');}).catch(function(e){console.error('fbSave:',e);setSS('error');});
+  ]).then(function(){setSS('synced');}).catch(function(e){console.error('fbSave error:',e.code,e.message);setSS('error');});
 };
 window.fbSaveDebounced=function(){setSS('saving');clearTimeout(_sq);_sq=setTimeout(window.fbSave,900);};
 
@@ -61,11 +67,13 @@ function fbLoad(){
     if(iv.exists){
       mutArr(window.inventory,JSON.parse(iv.data().data).map(migrateItem));
     } else {
-      var seeded=window.RAW.map(function(r,i){return migrateItem(Object.assign({},r,{id:i+1,notes:r.notes||'',expiry:r.expiry||''}),i);});
+      // First time - seed from RAW. RAW is defined in main script which runs after this module.
+      var rawData = window.RAW || [];
+      var seeded=rawData.map(function(r,i){return migrateItem(Object.assign({},r,{id:i+1,notes:r.notes||'',expiry:r.expiry||''}),i);});
       mutArr(window.inventory,seeded);
       mutArr(window.changeLog,[]);
       mutArr(window.transactions,[]);
-      window.fbSave();
+      if(seeded.length) window.fbSave();
     }
     if(cl.exists)mutArr(window.changeLog,JSON.parse(cl.data().data));
     if(tx.exists)mutArr(window.transactions,JSON.parse(tx.data().data));
@@ -99,7 +107,12 @@ function fbLoad(){
       var d=JSON.parse(snap.data().data);
       if(JSON.stringify(d)!==JSON.stringify(window.transactions))mutArr(window.transactions,d);
     });
-  }).catch(function(e){console.error('fbLoad:',e);setSS('error');if(window.localFallbackBoot)window.localFallbackBoot();});
+  }).catch(function(e){
+    console.error('fbLoad error - details:', e.code, e.message, e);
+    // Only show offline if it's a real network/auth error, not a data error
+    setSS('error');
+    if(window.localFallbackBoot)window.localFallbackBoot();
+  });
 }
 
 auth.onAuthStateChanged(function(user){
@@ -109,7 +122,7 @@ auth.onAuthStateChanged(function(user){
     if(ma)ma.style.display='';
     if(lb)lb.style.display='flex';
     var errEl=document.getElementById('loginErr');if(errEl)errEl.textContent='';
-    fbLoad();
+    setTimeout(fbLoad,200);
   } else {
     if(ls)ls.style.display='flex';
     if(ma)ma.style.display='none';
@@ -287,10 +300,10 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 .clf{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .clfb{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);color:var(--text2);transition:all .15s}
 .clfb.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center;padding:16px}
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto}
 .mo.open{display:flex}
-.md{background:var(--surface);border-radius:var(--rl);width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
-.md-sm{max-width:420px}.md-lg{max-width:680px}
+.md{background:var(--surface);border-radius:var(--rl);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.md-sm{max-width:420px}.md-lg{max-width:760px}
 .mh{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
 .mt2{font-size:15px;font-weight:700;color:var(--navy)}
 .mc{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;background:transparent;color:var(--text2);font-size:20px;line-height:1}
@@ -428,7 +441,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 .tx-mode-btn.rem-sel{border-color:#b91c1c;background:#fef2f2;color:#b91c1c}
 .tx-step{display:none}.tx-step.active{display:block}
 .tx-search-wrap{position:relative}
-.tx-results{position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--r);box-shadow:0 4px 20px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto}
+.tx-results{position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:200;max-height:300px;overflow-y:auto}
 .tx-result-item{padding:10px 13px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;display:flex;align-items:center;justify-content:space-between}
 .tx-result-item:last-child{border-bottom:none}
 .tx-result-item:hover,.tx-result-item.focused{background:var(--plight)}
@@ -1427,7 +1440,7 @@ function updateBadges(){
   // Expiring
   let expN=0;
   items.forEach(r=>{
-    if(r.multilot&&r.lots&&r.lots.length)r.lots.forEach(l=>{if(l.expiry){const d=daysLeft(l.expiry);if(d>=0&&d<=30)expN++;}});
+    if(r.lotDetails&&r.lotDetails.length)r.lotDetails.forEach(l=>{if(l.expiry){const d=daysLeft(l.expiry);if(d>=0&&d<=30)expN++;}});
     else if(r.expiry){const d=daysLeft(r.expiry);if(d>=0&&d<=30)expN++;}
   });
   document.getElementById('s-expiring').textContent=expN;
@@ -1460,8 +1473,8 @@ function updateBadges(){
 
 // ═══ LOT HELPERS ═══
 function daysLeft(exp){if(!exp)return null;return Math.ceil((new Date(exp)-new Date())/86400000);}
-function calcTotal(r){if(r.multilot&&r.lots&&r.lots.length)return r.lots.reduce((s,l)=>s+(parseFloat(l.qty)||0),0);return parseFloat(r.quantity)||0;}
-function getEarliestExp(r){if(r.multilot&&r.lots&&r.lots.length){const w=r.lots.filter(l=>l.expiry).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));return w.length?w[0].expiry:null;}return r.expiry||null;}
+function calcTotal(r){if(r.lotDetails&&r.lotDetails.length)return r.lotDetails.reduce((s,l)=>s+(parseFloat(l.qty)||0),0);return parseFloat(r.quantity)||0;}
+function getEarliestExp(r){if(r.lotDetails&&r.lotDetails.length){const w=r.lotDetails.filter(l=>l.expiry).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));return w.length?w[0].expiry:null;}return r.expiry||null;}
 function getFefo(lots){const v=lots.filter(l=>(parseFloat(l.qty)||0)>0&&l.expiry).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));return v.length?v[0]:(lots.find(l=>(parseFloat(l.qty)||0)>0)||null);}
 function syncTotal(r){r.quantity=calcTotal(r);r.reorder=r.quantity===0?'REORDER':'OK';}
 function expInline(exp){if(!exp)return'';const d=daysLeft(exp);if(d<0)return'<span class="eexp">EXPIRED</span>';if(d<=14)return`<span class="eurg">${d}d</span>`;if(d<=60)return`<span class="esoon">${d}d</span>`;return`<span class="eok">${exp}</span>`;}
@@ -1539,9 +1552,8 @@ function renderTable(){
     if(ee)nm+=`<br>${expInline(ee)}`;
     else if(r.expiry)nm+=`<br>${expInline(r.expiry)}`;
     if(r.notes)nm+=`<br><small style="color:var(--text3);font-weight:400">${r.notes}</small>`;
-    let qtyCell=r.multilot
-      ?(()=>{const fefo=r.lots&&r.lots.length?getFefo(r.lots):null;return`<div style="min-width:70px"><strong style="font-size:14px">${tq}</strong>${fefo?`<br><span class="fefo-badge">USE: ${fefo.lot||'?'}</span>`:''}</div>`;})()
-      :`<input class="qi" type="text" value="${r.quantity}" onchange="updQty(${r.id},this.value)" onclick="this.select()">`;
+    const _fefo=r.lotDetails&&r.lotDetails.length?getFefo(r.lotDetails):null;
+    let qtyCell=`<div style="min-width:70px"><strong style="font-size:14px">${tq}</strong>${_fefo?`<br><span class="fefo-badge">USE: ${_fefo.lot||'?'}</span>`:''}</div>`;
     const ldLen=r.lotDetails?r.lotDetails.length:0;const toggleBtn=`<button class="lot-toggle" id="lt-${r.id}" onclick="toggleLots(${r.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:10px;height:10px"><polyline points="9 18 15 12 9 6"/></svg>${ldLen>0?ldLen+' lot'+(ldLen!==1?'s':''):'Lots'}</button>`;
     const tr=document.createElement('tr');
     tr.className=`${reorder?'rr':''}${expCls}${sel?' sel':''}`;tr.id=`row-${r.id}`;
@@ -1556,7 +1568,8 @@ function renderTable(){
         <button class="ib d" onclick="openDelModal(${r.id})" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
       </div></td>`;
     body.appendChild(tr);
-    if(r.multilot){const sub=document.createElement('tr');sub.className='lot-sub-row';sub.id=`lsub-${r.id}`;sub.style.display='none';sub.innerHTML=`<td colspan="9"><div class="lot-panel" id="lpanel-${r.id}"></div></td>`;body.appendChild(sub);}
+    // All items have lot tracking - always create sub-row
+    {const sub=document.createElement('tr');sub.className='lot-sub-row';sub.id=`lsub-${r.id}`;sub.style.display='none';sub.innerHTML=`<td colspan="9"><div class="lot-panel" id="lpanel-${r.id}"></div></td>`;body.appendChild(sub);}
   });
   renderPg(pages);syncCbAll();
 }
@@ -1884,7 +1897,7 @@ function txGoStep(stepId){
 }
 
 // ── ADD FLOW ──
-let _txSearchTO=null;
+var _txSearchTO=null;
 function txAddSearch(val){
   txSearchTerm=val.trim();
   document.getElementById('tx-add-no-match').style.display='none';
@@ -2224,7 +2237,7 @@ function renderOverview(){
   <div class="ac"><div class="act">Medication Stock by Type</div><div class="acs">In-stock vs reorder</div><div class="ach"><canvas id="chMed"></canvas></div></div>
   <div class="ac" style="grid-column:1/-1"><div class="act">Item Prices &amp; Value</div><div class="acs">Items with prices — sorted by total value</div>
   <div style="max-height:230px;overflow-y:auto"><table class="at"><thead><tr><th>Item</th><th>Category</th><th>Unit Price</th><th>Qty</th><th>Total Value</th></tr></thead><tbody>
-  ${all.filter(r=>r.price>0).map(r=>({...r,tv:calcTotal(r)*(r.price||0)})).sort((a,b)=>b.tv-a.tv).map(r=>`<tr><td>${r.item}${r.multilot?'<span class="ml-badge" style="margin-left:3px">ML</span>':''}</td><td><span class="badge cat-${r.category||'Other'}">${r.category||'—'}</span></td><td>$${Number(r.price).toFixed(2)}</td><td>${calcTotal(r)}</td><td><strong>$${r.tv.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></td></tr>`).join('')||'<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text3)">Add prices to see values</td></tr>'}
+  ${all.filter(r=>r.price>0).map(r=>({...r,tv:calcTotal(r)*(r.price||0)})).sort((a,b)=>b.tv-a.tv).map(r=>`<tr><td>${r.item}${false?'<span class="ml-badge" style="margin-left:3px">ML</span>':''}</td><td><span class="badge cat-${r.category||'Other'}">${r.category||'—'}</span></td><td>$${Number(r.price).toFixed(2)}</td><td>${calcTotal(r)}</td><td><strong>$${r.tv.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></td></tr>`).join('')||'<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text3)">Add prices to see values</td></tr>'}
   </tbody></table></div></div></div>`;
   if(cats.length)aCharts.cat=new Chart(document.getElementById('chCat'),{type:'doughnut',data:{labels:cats,datasets:[{data:cats.map(c=>catC[c]),backgroundColor:clrs,borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:11},padding:7}}}}});
   if(vc.length)aCharts.val=new Chart(document.getElementById('chVal'),{type:'bar',data:{labels:vc,datasets:[{data:vc.map(c=>catV[c]),backgroundColor:clrs,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v2=>'$'+v2.toLocaleString(),font:{size:10}}},x:{ticks:{font:{size:10}}}}}});
@@ -2250,7 +2263,7 @@ function renderRestock(){
     const tq=calcTotal(r);const cls=tq===0?'out':tq<=2?'low':'par';
     const status=tq===0?'OUT OF STOCK':tq<=2?`Low — ${tq} remaining`:r.par?`Below PAR level (${r.par})`:'Manually flagged';
     return`<div class="restock-card ${cls}">
-      <div style="flex:1"><div class="rc-name">${r.item}${r.multilot?'<span class="ml-badge" style="margin-left:4px">ML</span>':''}</div>
+      <div style="flex:1"><div class="rc-name">${r.item}${false?'<span class="ml-badge" style="margin-left:4px">ML</span>':''}</div>
       <div class="rc-meta">${r.category||'—'} · ${r.vendor||'—'}</div>
       <div class="rc-meta" style="margin-top:2px;font-weight:600;color:${cls==='out'?'var(--danger)':cls==='low'?'var(--warn)':'var(--teal)'}">${status}</div></div>
       <div style="text-align:right;flex-shrink:0"><div class="rc-qty ${cls}">${tq}</div>
@@ -2265,7 +2278,7 @@ function renderExpiring(){
   inventory.forEach(r=>{
     if(!r.item||!r.item.trim())return;
     if(cat&&r.category!==cat)return;
-    if(r.multilot&&r.lots&&r.lots.length)r.lots.forEach((l,i)=>{if(l.expiry)entries.push({item:r.item,category:r.category,lot:l.lot||'—',expiry:l.expiry,qty:l.qty,id:r.id,lotIdx:i});});
+    if(r.lotDetails&&r.lotDetails.length)r.lotDetails.forEach((l,i)=>{if(l.expiry)entries.push({item:r.item,category:r.category,lot:l.lot||'—',expiry:l.expiry,qty:l.qty,id:r.id,lotIdx:i});});
     else if(r.expiry)entries.push({item:r.item,category:r.category,lot:r.lot||'—',expiry:r.expiry,qty:calcTotal(r),id:r.id,lotIdx:null});
   });
   entries.sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
@@ -2288,7 +2301,7 @@ function renderExpiring(){
     const rowCls=d<0?'ee':d<=14?'eu':d<=60?'es':'';
     return '<tr class="'+rowCls+'"><td>'+bdg+'</td><td><strong>'+e.item+'</strong></td><td><span class="badge cat-'+(e.category||'Other')+'">'+(e.category||'—')+'</span></td><td style="font-family:monospace;font-size:11px">'+e.lot+'</td><td style="font-weight:600">'+e.expiry+'</td><td>'+bdg+'</td><td>'+e.qty+'</td><td><button class="ib e" onclick="'+editFn+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></td></tr>';
   }).join('');
-  const noExp=inventory.filter(r=>r.category==='Medications'&&r.item&&r.item.trim()&&!r.expiry&&!(r.multilot&&r.lots&&r.lots.length));
+  const noExp=inventory.filter(r=>r.category==='Medications'&&r.item&&r.item.trim()&&!r.expiry&&!(r.lotDetails&&r.lotDetails.length));
   document.getElementById('noExpList').innerHTML=noExp.length===0
     ?'<p style="font-size:12px;color:var(--okm)">✓ All medications have expiry tracking.</p>'
     :'<div style="display:flex;flex-wrap:wrap;gap:6px">'+noExp.map(r=>'<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;font-size:12px;display:flex;align-items:center;gap:5px">'+r.item+'<button class="ib e" style="width:18px;height:18px" onclick="openItemModal('+r.id+')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>').join('')+'</div>';
@@ -2377,7 +2390,7 @@ function renderChangelog(){
 
 
 // ═══ EXPORT ═══
-function exportCSV(){const h=['Status','SKU','Item','Qty','Price','Category','Vendor','Expiry','Lot','Multi-Lot','Notes'];const rows=filtered.map(r=>[r.reorder,(getSkus(r)||[]).join('|'),r.item,calcTotal(r),r.price,r.category,r.vendor,r.expiry||'',r.lot||'',r.multilot?'Yes':'No',r.notes||''].map(v=>`"${String(v||'').replace(/"/g,'""')}"`));const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([[h,...rows].map(r=>r.join(',')).join('\n')],{type:'text/csv'}));a.download=`plessen_inventory_${new Date().toISOString().slice(0,10)}.csv`;a.click();showToast('Exported','success');}
+function exportCSV(){const h=['Status','SKU','Item','Qty','Price','Category','Vendor','Expiry','Lot','Multi-Lot','Notes'];const rows=filtered.map(r=>[r.reorder,(getSkus(r)||[]).join('|'),r.item,calcTotal(r),r.price,r.category,r.vendor,r.expiry||'',r.lot||'','Yes',r.notes||''].map(v=>`"${String(v||'').replace(/"/g,'""')}"`));const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([[h,...rows].map(r=>r.join(',')).join('\n')],{type:'text/csv'}));a.download=`plessen_inventory_${new Date().toISOString().slice(0,10)}.csv`;a.click();showToast('Exported','success');}
 function exportTx(){const h=['Mode','Reason','Item','Qty','Unit','Lot','By','Date','Notes'];const rows=transactions.map(t=>[t.mode||'',t.reasonLabel||'',t.item,t.qty,t.unit||'',t.lot||'',t.by||'',t.date||'',t.notes||''].map(v=>`"${String(v).replace(/"/g,'""')}"`));const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([[h,...rows].map(r=>r.join(',')).join('\n')],{type:'text/csv'}));a.download=`plessen_transactions_${new Date().toISOString().slice(0,10)}.csv`;a.click();showToast('Exported','success');}
 
 
@@ -2392,9 +2405,36 @@ document.addEventListener('keydown',e=>{
 ['itemModal','lotModal','delModal','bDelModal','devModal','txModal'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});});
 
 // ═══ BOOT ═══
-if(!loadAll())initInventory();
-updateBadges();
-applyFilters();
+// Expose functions so Firebase module can call them after data loads
+window.updateBadges = updateBadges;
+window.applyFilters = applyFilters;
+window.logChange = logChange;
+window.saveAll = saveAll;
+window.getSkus = getSkus;
+window.calcTotal = calcTotal;
+window.getFefo = getFefo;
+window.findItems = findItems;
+window.findBySku = findBySku;
+// localFallbackBoot: used if Firebase fails - seeds from RAW and boots UI
+window.localFallbackBoot = function(){
+  if(!window.inventory.length){
+    var seeded = RAW.map(function(r,i){
+      return {
+        id:i+1, item:r.item||'', notes:r.notes||'', expiry:r.expiry||'',
+        skus: r.sku ? [r.sku].filter(Boolean) : [],
+        lotNums: [], lotDetails: [],
+        quantity: parseFloat(r.quantity)||0,
+        reorder: r.reorder||'OK', price: r.price||0, par: r.par||'',
+        category: r.category||'', vendor: r.vendor||''
+      };
+    });
+    seeded.forEach(function(r){ window.inventory.push(r); });
+  }
+  updateBadges();
+  applyFilters();
+};
+// Firebase module handles the actual boot after auth.
+// If Firebase fails, localFallbackBoot is called by the catch block.
 
 // ═══ SELECTION ═══
 function toggleSel(id,c){c?selectedIds.add(id):selectedIds.delete(id);updBB();syncCbAll();}
