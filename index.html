@@ -98,14 +98,30 @@ function fbLoad(){
       setTimeout(function(){_ru=false;},600);
     });
     db.doc('plessen/changelog').onSnapshot(function(snap){
-      if(!snap.exists||_ru)return;
+      if(!snap.exists)return;
+      // Note: do NOT check _ru here - changelog updates from other devices
+      // must always come through regardless of inventory sync state
       var d=JSON.parse(snap.data().data);
-      if(JSON.stringify(d)!==JSON.stringify(window.changeLog)){mutArr(window.changeLog,d);if(window.updateBadges)window.updateBadges();}
+      if(JSON.stringify(d)!==JSON.stringify(window.changeLog)){
+        mutArr(window.changeLog,d);
+        if(window.updateBadges)window.updateBadges();
+        // If changelog page is open, re-render it
+        var clBody=document.getElementById('clBody');
+        if(clBody&&document.getElementById('page-changelog')&&
+           document.getElementById('page-changelog').classList.contains('active')){
+          if(window.renderChangelog)window.renderChangelog();
+        }
+      }
     });
     db.doc('plessen/transactions').onSnapshot(function(snap){
-      if(!snap.exists||_ru)return;
+      if(!snap.exists)return;
       var d=JSON.parse(snap.data().data);
-      if(JSON.stringify(d)!==JSON.stringify(window.transactions))mutArr(window.transactions,d);
+      if(JSON.stringify(d)!==JSON.stringify(window.transactions)){
+        mutArr(window.transactions,d);
+        // Refresh history panel if it's visible
+        var histBody=document.getElementById('histBody');
+        if(histBody&&window.renderHistPanel)window.renderHistPanel();
+      }
     });
   }).catch(function(e){
     console.error('fbLoad error - details:', e.code, e.message, e);
@@ -300,9 +316,9 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 .clf{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .clfb{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);color:var(--text2);transition:all .15s}
 .clfb.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto}
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-start;justify-content:center;padding:20px 16px;overflow-y:auto}
 .mo.open{display:flex}
-.md{background:var(--surface);border-radius:var(--rl);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.md{background:var(--surface);border-radius:var(--rl);width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
 .md-sm{max-width:420px}.md-lg{max-width:760px}
 .mh{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
 .mt2{font-size:15px;font-weight:700;color:var(--navy)}
@@ -440,9 +456,9 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 .tx-mode-btn.add-sel{border-color:#059669;background:#ecfdf5;color:#065f46}
 .tx-mode-btn.rem-sel{border-color:#b91c1c;background:#fef2f2;color:#b91c1c}
 .tx-step{display:none}.tx-step.active{display:block}
-.tx-search-wrap{position:relative}
-.tx-results{position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.18);z-index:200;max-height:300px;overflow-y:auto}
-.tx-result-item{padding:10px 13px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;display:flex;align-items:center;justify-content:space-between}
+.tx-search-wrap{}
+.tx-results{position:static;background:#fff;border:1px solid var(--border);border-radius:var(--r);box-shadow:0 4px 16px rgba(0,0,0,.1);margin-top:4px;max-height:320px;overflow-y:auto}
+.tx-result-item{padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;display:flex;align-items:center;justify-content:space-between;min-height:54px}
 .tx-result-item:last-child{border-bottom:none}
 .tx-result-item:hover,.tx-result-item.focused{background:var(--plight)}
 .tx-result-name{font-size:13px;font-weight:600;color:var(--text)}
@@ -2418,6 +2434,8 @@ window.calcTotal = calcTotal;
 window.getFefo = getFefo;
 window.findItems = findItems;
 window.findBySku = findBySku;
+window.renderChangelog = renderChangelog;
+window.renderHistPanel = renderHistPanel;
 // localFallbackBoot: used if Firebase fails - seeds from RAW and boots UI
 window.localFallbackBoot = function(){
   if(!window.inventory.length){
