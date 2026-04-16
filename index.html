@@ -1494,8 +1494,10 @@ function showInvTab(tab){
   if(tab==='history')renderHistPanel();
 }
 function renderHistPanel(){
-  const mode=(document.getElementById('hist-mode')||{}).value||'';
-  const days=parseInt((document.getElementById('hist-days')||{}).value)||30;
+  const modeEl=document.getElementById('hist-mode');
+  const daysEl=document.getElementById('hist-days');
+  const mode=modeEl?modeEl.value||'':'';
+  const days=parseInt(daysEl?daysEl.value||'30':'30')||30;
   const cut=Date.now()-days*86400000;
   const list=transactions.filter(t=>new Date(t.ts).getTime()>cut&&(!mode||t.mode===mode)).slice(0,200);
   const body=document.getElementById('histBody');if(!body)return;
@@ -1649,19 +1651,18 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
 function onScanInput(val){
   clearTimeout(scanTO);if(!val||val.length<3)return;
   scanTO=setTimeout(()=>{
-    // Clear main search bar first
-    const si=document.getElementById('searchInput');if(si&&si.value)si.value='';
-    if(curMode==='search'){apSearchSync(val);document.getElementById('scanLive').value='';}
-    else{
-      // Match against skus[] array - route to transaction modal
-      const matches=findBySku(val);const r=matches.length?matches[0]:null;
-      document.getElementById('scanLive').value='';
-      // Open transaction modal pre-filled with scanned value
-      openTxModal(val);
-      if(r){
-        // Auto-select the found item
-        setTimeout(()=>{txAddSelectItem(r);},150);
-      }
+    const code=val.trim();
+    if(!code)return;
+    // Clear scanner input and main search bar
+    document.getElementById('scanLive').value='';
+    const si=document.getElementById('searchInput');if(si)si.value='';
+    // Always route to transaction modal with scanned value
+    const matches=findBySku(code);
+    const r=matches.length?matches[0]:null;
+    openTxModal(code);
+    if(r){
+      // Item found - auto-select after modal opens
+      setTimeout(()=>{txAddSelectItem(r);},200);
     }
   },280);
 }
@@ -2267,7 +2268,7 @@ function renderRestock(){
       <div class="rc-meta">${r.category||'—'} · ${r.vendor||'—'}</div>
       <div class="rc-meta" style="margin-top:2px;font-weight:600;color:${cls==='out'?'var(--danger)':cls==='low'?'var(--warn)':'var(--teal)'}">${status}</div></div>
       <div style="text-align:right;flex-shrink:0"><div class="rc-qty ${cls}">${tq}</div>
-      <button class="btn btn-p btn-xs" style="margin-top:5px" onclick="openTxModal()"\'")}';apLotSync('add');showPage('inventory')">+ Add Stock</button></div>
+      <button class="btn btn-p btn-xs" style="margin-top:5px" onclick="openTxModal()"\'")}';showPage('inventory')">+ Add Stock</button></div>
     </div>`;}).join('');
 }
 function switchRS(f,el){rsFilter=f;document.querySelectorAll('#sub-restock .pt').forEach(t=>t.classList.remove('active'));el.classList.add('active');renderRestock();}
@@ -2406,6 +2407,8 @@ document.addEventListener('keydown',e=>{
 
 // ═══ BOOT ═══
 // Expose functions so Firebase module can call them after data loads
+window.RAW = RAW;
+window.ML_DEFAULTS = ML_DEFAULTS;
 window.updateBadges = updateBadges;
 window.applyFilters = applyFilters;
 window.logChange = logChange;
