@@ -46,6 +46,14 @@ window.fbSave=function(){
   ]).then(function(){setSS('synced');}).catch(function(e){console.error('fbSave error:',e.code,e.message);setSS('error');});
 };
 window.fbSaveDebounced=function(){setSS('saving');clearTimeout(_sq);_sq=setTimeout(window.fbSave,900);};
+// Immediately write just the changelog document (called from logChange)
+window.fbSaveChangelog=function(){
+  if(!window._fbReady||!db)return;
+  db.doc('plessen/changelog').set({
+    data:JSON.stringify(window.changeLog),
+    ts:new Date().toISOString()
+  }).catch(function(e){console.error('changelog write error:',e);});
+};
 
 function migrateItem(r,i){
   if(!Array.isArray(r.skus))r.skus=r.sku?[r.sku.trim()].filter(Boolean):[];
@@ -99,18 +107,13 @@ function fbLoad(){
     });
     db.doc('plessen/changelog').onSnapshot(function(snap){
       if(!snap.exists)return;
-      // Note: do NOT check _ru here - changelog updates from other devices
-      // must always come through regardless of inventory sync state
       var d=JSON.parse(snap.data().data);
-      if(JSON.stringify(d)!==JSON.stringify(window.changeLog)){
-        mutArr(window.changeLog,d);
-        if(window.updateBadges)window.updateBadges();
-        // If changelog page is open, re-render it
-        var clBody=document.getElementById('clBody');
-        if(clBody&&document.getElementById('page-changelog')&&
-           document.getElementById('page-changelog').classList.contains('active')){
-          if(window.renderChangelog)window.renderChangelog();
-        }
+      mutArr(window.changeLog,d);
+      if(window.updateBadges)window.updateBadges();
+      // Always re-render changelog if page is open
+      var clPage=document.getElementById('page-changelog');
+      if(clPage&&clPage.classList.contains('active')&&window.renderChangelog){
+        window.renderChangelog();
       }
     });
     db.doc('plessen/transactions').onSnapshot(function(snap){
@@ -795,8 +798,8 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
       <select id="cl-date-filter" onchange="renderChangelog()" style="font-size:12px">
         <option value="today">Today</option>
         <option value="7">Last 7 days</option>
-        <option value="30" selected>Last 30 days</option>
-        <option value="9999">All time</option>
+        <option value="30">Last 30 days</option>
+        <option value="9999" selected>All time</option>
       </select>
       <button class="btn btn-s btn-sm" onclick="if(confirm('Clear all logged changes?')){changeLog=[];saveAll();renderChangelog();updateBadges();showToast('Log cleared','warning')}">Clear Log</button>
     </div>
@@ -1377,6 +1380,11 @@ function logChange(type,item,detail=''){
   changeLog.unshift({type,item,detail,ts:new Date().toISOString(),id:Date.now()+Math.random()});
   if(changeLog.length>2000)changeLog.pop();
   updateBadges();
+  // Re-render changelog page live if it's open
+  const clPage=document.getElementById('page-changelog');
+  if(clPage&&clPage.classList.contains('active'))renderChangelog();
+  // Write changelog to Firestore immediately (separate from debounced full save)
+  if(window.fbSaveChangelog)window.fbSaveChangelog();
 }
 window.localFallbackBoot=function(){
   if(!loadAll())initInventory();
@@ -2426,6 +2434,8 @@ document.addEventListener('keydown',e=>{
 window.RAW = RAW;
 window.ML_DEFAULTS = ML_DEFAULTS;
 window.updateBadges = updateBadges;
+window.renderChangelog = renderChangelog;
+window.renderHistPanel = renderHistPanel;
 window.applyFilters = applyFilters;
 window.logChange = logChange;
 window.saveAll = saveAll;
