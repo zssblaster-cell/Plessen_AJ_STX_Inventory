@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Plessen Ophthalmology — Clinical Inventory</title>
-<script src="https://unpkg.com/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <!-- Firebase compat SDKs - official CDN -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -99,6 +99,7 @@ function fbLoad(){
     var mig=window.inventory.map(function(r,i){var b=JSON.stringify(r),a=JSON.stringify(migrateItem(Object.assign({},r),i));if(b!==a)dirty=true;return JSON.parse(a);});
     mutArr(window.inventory,mig);
     if(dirty)window.fbSave();
+    setSS('synced');
     window._fbReady=true;
     // Load config then route by email
     db.doc('plessen/config').get().then(function(cfgSnap){
@@ -353,7 +354,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 .clf{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .clfb{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);color:var(--text2);transition:all .15s}
 .clfb.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-start;justify-content:center;padding:20px 16px;overflow-y:auto}
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:flex-start;justify-content:center;padding:20px 16px;overflow-y:auto;cursor:default}
 .mo.open{display:flex}
 .md{background:var(--surface);border-radius:var(--rl);width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
 .md-sm{max-width:420px}.md-lg{max-width:760px}
@@ -556,7 +557,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 .verify-tab{padding:10px;border-radius:var(--r);font-size:12px;font-weight:700;cursor:pointer;border:2px solid var(--border);background:var(--surface);color:var(--text2);text-align:center;transition:all .15s}
 .verify-tab.active{border-color:var(--blue);background:var(--plight);color:var(--blue)}
 /* ── SETTINGS MODAL ── */
-#settingsModal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+#settingsModal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
 .tech-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
 .tech-row:last-child{border-bottom:none}
 .tech-name-cell{flex:1;font-size:13px;font-weight:600;color:var(--text)}
@@ -892,9 +893,9 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 </div><!-- /wrap -->
 
 <!-- SCANNER DEVICE MODAL -->
-<div class="mo" id="devModal">
+<div class="mo" id="devModal" style="z-index:600">
   <div class="md">
-    <div class="mh"><span class="mt2">Connect Scanner</span><button class="mc" onclick="closeDevModal()">×</button></div>
+    <div class="mh"><span class="mt2">Connect Scanner</span><button onclick="closeDevModal()" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1" title="Close">×</button></div>
     <div class="mb">
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Scan for USB, Bluetooth, and WiFi scanners. USB HID scanners (Zebra, Honeywell, Datalogic) work plug-and-play — just click the field and scan. Bluetooth scanners need to be paired via your OS settings first.</p>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:11px">
@@ -925,7 +926,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 <!-- DELETE CONFIRM -->
 <div class="mo" id="delModal">
   <div class="md md-sm">
-    <div class="mh"><span class="mt2">Confirm Delete</span><button class="mc" onclick="closeDelModal()">×</button></div>
+    <div class="mh"><span class="mt2">Confirm Delete</span><button onclick="closeDelModal()" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1" title="Close">×</button></div>
     <div class="mb"><p style="color:var(--text2)">Delete <strong id="delName"></strong>? This cannot be undone.</p></div>
     <div class="mf"><button class="btn btn-s" onclick="closeDelModal()">Cancel</button><button class="btn btn-d" onclick="confirmDel()">Delete</button></div>
   </div>
@@ -934,7 +935,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 <!-- BATCH DELETE -->
 <div class="mo" id="bDelModal">
   <div class="md md-sm">
-    <div class="mh"><span class="mt2">Delete Selected</span><button class="mc" onclick="document.getElementById('bDelModal').classList.remove('open')">×</button></div>
+    <div class="mh"><span class="mt2">Delete Selected</span><button onclick="document.getElementById('bDelModal').classList.remove('open')" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1" title="Close">×</button></div>
     <div class="mb"><p style="color:var(--text2)">Delete <strong id="bDelCnt"></strong> items? Cannot be undone.</p></div>
     <div class="mf"><button class="btn btn-s" onclick="document.getElementById('bDelModal').classList.remove('open')">Cancel</button><button class="btn btn-d" onclick="confirmBDel()">Delete All</button></div>
   </div>
@@ -948,7 +949,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 <!-- ITEM MODAL -->
 <div class="mo" id="itemModal">
   <div class="md md-lg">
-    <div class="mh"><span class="mt2" id="itemModalTitle">Edit Item</span><button class="mc" onclick="closeItemModal()">×</button></div>
+    <div class="mh"><span class="mt2" id="itemModalTitle">Edit Item</span><button onclick="closeItemModal()" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1" title="Close">×</button></div>
     <div class="mb">
       <div class="fg">
         <div class="field full"><label>Item Name *</label><input type="text" id="f-item" placeholder="e.g. Eylea 2mg PFS"/></div>
@@ -985,7 +986,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 <!-- LOT MODAL -->
 <div class="mo" id="lotModal">
   <div class="md">
-    <div class="mh"><span class="mt2" id="lotModalTitle">Add Lot</span><button class="mc" onclick="closeLotModal()">×</button></div>
+    <div class="mh"><span class="mt2" id="lotModalTitle">Add Lot</span><button onclick="closeLotModal()" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1" title="Close">×</button></div>
     <div class="mb">
       <div id="lot-item-name" style="padding:8px 12px;background:var(--surface2);border-radius:var(--r);font-weight:700;font-size:14px;color:var(--navy);margin-bottom:14px"></div>
       <div class="fg">
@@ -1012,7 +1013,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
   <div class="md md-lg">
     <div class="mh">
       <span class="mt2" id="txModalTitle">New Transaction</span>
-      <button class="mc" onclick="closeTxModal()">×</button>
+      <button onclick="closeTxModal()" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1" title="Close">×</button>
     </div>
     <div class="mb" id="txModalBody">
 
@@ -1045,7 +1046,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>Connect Scanner
               </button>
             </div>
-            <div class="cam-wrap" id="txCamWrap" style="display:none;margin-top:8px;border-radius:var(--r);overflow:hidden;position:relative;background:#000;min-height:200px">
+            <div class="cam-wrap" id="txCamWrap" style="display:none;margin-top:8px;border-radius:var(--r);overflow:hidden;position:relative;background:#000;min-height:200px;z-index:10">
               <video id="txCamVideo" autoplay playsinline muted style="width:100%;display:block"></video>
               <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
                 <div style="width:200px;height:80px;border:2px solid #34d399;border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,.4)"></div>
@@ -2571,7 +2572,7 @@ document.addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();document.getElementById('searchInput').focus();document.getElementById('searchInput').select();}
   if((e.metaKey||e.ctrlKey)&&e.key==='t'){e.preventDefault();openTxModal();}
 });
-['itemModal','lotModal','delModal','bDelModal','devModal','txModal'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});});
+// Click-outside-to-close disabled — use X button to close
 
 
 // ═══════════════════════════════════════════════════
@@ -2846,23 +2847,29 @@ function showAddTech(){
 }
 
 function hideAddTech(){
-  document.getElementById('s-add-tech-form').style.display='none';
+  const form=document.getElementById('s-add-tech-form');
+  if(form){form.style.display='none';form.dataset.editIdx='';}
 }
 
 function saveTech(){
   const name=document.getElementById('s-tech-name').value.trim();
   const pin=document.getElementById('s-tech-pin').value.trim();
   const badge=document.getElementById('s-tech-badge').value.trim();
+  const form=document.getElementById('s-add-tech-form');
+  const editIdx=form.dataset.editIdx!==undefined&&form.dataset.editIdx!==''?parseInt(form.dataset.editIdx):-1;
   if(!name){document.getElementById('s-add-tech-err').textContent='Name is required.';return;}
   if(!pin){document.getElementById('s-add-tech-err').textContent='PIN is required.';return;}
-  if(appConfig.techs.find(t=>t.pin===pin)){
-    document.getElementById('s-add-tech-err').textContent='That PIN is already in use.';return;
+  // Check PIN uniqueness (skip current entry if editing)
+  const pinConflict=appConfig.techs.find((t,i)=>t.pin===pin&&i!==editIdx);
+  if(pinConflict){document.getElementById('s-add-tech-err').textContent='That PIN is already in use.';return;}
+  if(editIdx>=0){
+    appConfig.techs[editIdx]={name,pin,badgeId:badge};
+    showToast('Staff member updated: '+name,'success');
+  } else {
+    appConfig.techs.push({name,pin,badgeId:badge});
+    showToast('Staff member added: '+name,'success');
   }
-  appConfig.techs.push({name,pin,badgeId:badge});
-  saveConfig();
-  renderTechList();
-  hideAddTech();
-  showToast('Staff member added: '+name,'success');
+  saveConfig();renderTechList();hideAddTech();
 }
 
 function deleteTech(idx){
@@ -2878,10 +2885,8 @@ function editTech(idx){
   document.getElementById('s-tech-name').value=t.name;
   document.getElementById('s-tech-pin').value=t.pin;
   document.getElementById('s-tech-badge').value=t.badgeId||'';
-  // Remove old entry when saved
-  appConfig.techs.splice(idx,1);
+  document.getElementById('s-add-tech-form').dataset.editIdx=idx;
 }
-
 function saveAdminPin(){
   const cur=document.getElementById('s-admin-pin-current').value.trim();
   const nw=document.getElementById('s-admin-pin-new').value.trim();
@@ -3022,7 +3027,10 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
 <!-- PIN MODAL (admin login + tech identification) -->
 <div id="pinModal" style="display:none">
   <div class="pin-card">
-    <div class="pin-title" id="pinTitle">Enter PIN</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div class="pin-title" id="pinTitle" style="margin-bottom:0">Enter PIN</div>
+      <button onclick="pinCancel()" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center" title="Close">×</button>
+    </div>
     <div class="pin-sub" id="pinSub">Enter your PIN to continue</div>
     <div class="pin-input-wrap">
       <input type="password" class="pin-input" id="pinInput" maxlength="12" inputmode="numeric"
@@ -3040,7 +3048,10 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
 <!-- VERIFY MODAL (tech must authenticate before completing removal) -->
 <div id="verifyModal" style="display:none">
   <div class="verify-card">
-    <div class="pin-title">Verify Identity</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div class="pin-title" style="margin-bottom:0">Verify Identity</div>
+      <button onclick="verifyCancel()" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center" title="Close">×</button>
+    </div>
     <div id="verifyItemInfo" style="text-align:center;font-size:13px;color:var(--text2);margin-bottom:16px"></div>
     <div class="verify-mode-tabs">
       <div class="verify-tab active" id="vTabPin" onclick="setVerifyMode('pin')">Enter PIN</div>
@@ -3070,7 +3081,7 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
   <div class="md md-lg">
     <div class="mh">
       <span class="mt2">Settings & User Management</span>
-      <button class="mc" onclick="closeSettings()">×</button>
+      <button onclick="closeSettings()" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1" title="Close">×</button>
     </div>
     <div class="mb">
       <!-- Admin PIN section -->
