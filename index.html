@@ -9,6 +9,12 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- Initialize shared arrays before Firebase runs -->
+<script>
+window.inventory = window.inventory || [];
+window.changeLog = window.changeLog || [];
+window.transactions = window.transactions || [];
+</script>
 <script>
 (function(){
 if(typeof firebase==='undefined'){
@@ -65,7 +71,7 @@ function migrateItem(r,i){
   delete r.multilot;
   return r;
 }
-function mutArr(arr,data){arr.length=0;data.forEach(function(x){arr.push(x);});}
+function mutArr(arr,data){if(!arr||!data)return;arr.length=0;data.forEach(function(x){arr.push(x);});}
 
 function fbLoad(){
   setSS('loading');
@@ -1332,9 +1338,7 @@ const REMOVAL_REASONS = {
 const SHARED_REASONS = new Set(['shared_stt','shared_oog']);
 
 // ═══ STATE ═══
-window.inventory=window.inventory||[];
-window.changeLog=window.changeLog||[];
-window.transactions=window.transactions||[];
+// Arrays pre-initialized above Firebase block - just alias them
 var inventory=window.inventory;
 var changeLog=window.changeLog;
 var transactions=window.transactions;
