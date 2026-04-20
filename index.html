@@ -99,14 +99,27 @@ function fbLoad(){
     var mig=window.inventory.map(function(r,i){var b=JSON.stringify(r),a=JSON.stringify(migrateItem(Object.assign({},r),i));if(b!==a)dirty=true;return JSON.parse(a);});
     mutArr(window.inventory,mig);
     if(dirty)window.fbSave();
-    setSS('synced');window._fbReady=true;
-    // Load config (techs + admin PIN) then show role screen
+    window._fbReady=true;
+    // Load config then route by email
     db.doc('plessen/config').get().then(function(cfgSnap){
-      if(cfgSnap.exists){
-        var cfg=cfgSnap.data();
-        if(window.applyConfig)window.applyConfig({adminPin:cfg.adminPin||'1234',techs:cfg.techs||[]});
+      var cfg={adminPin:'1234',techs:[]};
+      if(cfgSnap.exists&&cfgSnap.data()&&cfgSnap.data().adminPin){
+        cfg.adminPin=cfgSnap.data().adminPin;
+        cfg.techs=cfgSnap.data().techs||[];
       }
-      if(window.showRoleScreen)window.showRoleScreen();
+      if(window.applyConfig)window.applyConfig(cfg);
+      var email=window._authEmail||'';
+      if(email==='anthony.jolly@plesseneye.com'){
+        if(window.activateRole)window.activateRole('admin',null);
+        // activateRole calls updateBadges+applyFilters internally
+      } else if(email==='examuser@plesseneye.com'){
+        // Tech: show PIN screen, activateRole called after PIN entry
+        if(window.updateBadges)window.updateBadges();
+        if(window.applyFilters)window.applyFilters();
+        if(window.showTechPinScreen)window.showTechPinScreen();
+      } else {
+        if(window.showRoleScreen)window.showRoleScreen();
+      }
     }).catch(function(){
       if(window.showRoleScreen)window.showRoleScreen();
     });
@@ -159,12 +172,15 @@ auth.onAuthStateChanged(function(user){
     if(ma)ma.style.display='';
     if(lb)lb.style.display='flex';
     var errEl=document.getElementById('loginErr');if(errEl)errEl.textContent='';
+    // Determine role from email
+    window._authEmail=user.email;
     setTimeout(fbLoad,200);
   } else {
     if(ls)ls.style.display='flex';
     if(ma)ma.style.display='none';
     if(lb)lb.style.display='none';
     window._fbReady=false;
+    window._authEmail=null;
   }
 });
 
@@ -2568,28 +2584,19 @@ window.showRoleScreen = function(){
 };
 
 function selectRole(role){
-  document.getElementById('roleScreen').style.display='none';
-  if(role==='admin'){
-    // Show admin PIN entry
-    pinContext='admin';
-    document.getElementById('pinTitle').textContent='Admin PIN';
-    document.getElementById('pinSub').textContent='Enter your admin PIN to continue';
-    document.getElementById('pinScanNote').style.display='none';
-    document.getElementById('pinInput').value='';
-    document.getElementById('pinErr').textContent='';
-    document.getElementById('pinModal').style.display='flex';
-    setTimeout(()=>document.getElementById('pinInput').focus(),80);
-  } else {
-    // Tech - show PIN entry for identification
-    pinContext='tech';
-    document.getElementById('pinTitle').textContent='Staff Sign In';
-    document.getElementById('pinSub').textContent='Enter your PIN or scan your ID badge';
-    document.getElementById('pinScanNote').style.display='';
-    document.getElementById('pinInput').value='';
-    document.getElementById('pinErr').textContent='';
-    document.getElementById('pinModal').style.display='flex';
-    setTimeout(()=>document.getElementById('pinInput').focus(),80);
-  }
+  // Kept for fallback role screen - routes to PIN flow
+  showTechPinScreen();
+}
+function showTechPinScreen(){
+  // Staff login: show PIN screen to identify which staff member
+  pinContext='tech';
+  document.getElementById('pinTitle').textContent='Staff Sign In';
+  document.getElementById('pinSub').textContent='Enter your PIN or scan your ID badge';
+  document.getElementById('pinScanNote').style.display='';
+  document.getElementById('pinInput').value='';
+  document.getElementById('pinErr').textContent='';
+  document.getElementById('pinModal').style.display='flex';
+  setTimeout(()=>document.getElementById('pinInput').focus(),80);
 }
 
 function pinInputChange(){
@@ -2598,7 +2605,8 @@ function pinInputChange(){
 
 function pinCancel(){
   document.getElementById('pinModal').style.display='none';
-  document.getElementById('roleScreen').style.display='flex';
+  // Tech login - can't bypass PIN, log out instead
+  if(window.doLogout)window.doLogout();
 }
 
 function pinSubmit(){
@@ -2666,6 +2674,9 @@ function activateRole(role,tech){
   // Update performed-by displays
   updateByDisplays();
   showPage('inventory');
+  // Always render inventory immediately on role activation
+  updateBadges();
+  applyFilters();
 }
 
 function updateByDisplays(){
@@ -2954,7 +2965,9 @@ window.updateBadges = updateBadges;
 window.renderChangelog = renderChangelog;
 window.renderHistPanel = renderHistPanel;
 window.showRoleScreen = showRoleScreen;
+window.showTechPinScreen = showTechPinScreen;
 window.applyConfig = applyConfig;
+window.activateRole = activateRole;
 window.applyFilters = applyFilters;
 window.logChange = logChange;
 window.saveAll = saveAll;
@@ -2966,7 +2979,9 @@ window.findBySku = findBySku;
 window.renderChangelog = renderChangelog;
 window.renderHistPanel = renderHistPanel;
 window.showRoleScreen = showRoleScreen;
+window.showTechPinScreen = showTechPinScreen;
 window.applyConfig = applyConfig;
+window.activateRole = activateRole;
 // localFallbackBoot: used if Firebase fails - seeds from RAW and boots UI
 window.localFallbackBoot = function(){
   if(!window.inventory.length){
@@ -3002,25 +3017,7 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
 
 </script>
 
-<!-- ROLE SELECT SCREEN -->
-<div id="roleScreen" style="display:none">
-  <div class="role-card">
-    <div class="role-title">Welcome to Plessen Inventory</div>
-    <div class="role-sub">Select your role to continue</div>
-    <div class="role-btns">
-      <div class="role-btn" onclick="selectRole('admin')">
-        <div class="rb-icon">🔑</div>
-        <div class="rb-label">Admin</div>
-        <div class="rb-sub">Full access</div>
-      </div>
-      <div class="role-btn" onclick="selectRole('tech')">
-        <div class="rb-icon">👤</div>
-        <div class="rb-label">Staff</div>
-        <div class="rb-sub">Inventory & removal</div>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- Role screen removed: role determined by login email -->
 
 <!-- PIN MODAL (admin login + tech identification) -->
 <div id="pinModal" style="display:none">
