@@ -52,6 +52,10 @@ window.fbSave=function(){
   ]).then(function(){setSS('synced');}).catch(function(e){console.error('fbSave error:',e.code,e.message);setSS('error');});
 };
 window.fbSaveDebounced=function(){setSS('saving');clearTimeout(_sq);_sq=setTimeout(window.fbSave,900);};
+window.fbSaveConfig=function(cfg){
+  if(!db)return;
+  db.doc('plessen/config').set(cfg).catch(function(e){console.error('config save:',e);});
+};
 // Immediately write just the changelog document (called from logChange)
 window.fbSaveChangelog=function(){
   if(!window._fbReady||!db)return;
@@ -96,8 +100,16 @@ function fbLoad(){
     mutArr(window.inventory,mig);
     if(dirty)window.fbSave();
     setSS('synced');window._fbReady=true;
-    if(window.updateBadges)window.updateBadges();
-    if(window.applyFilters)window.applyFilters();
+    // Load config (techs + admin PIN) then show role screen
+    db.doc('plessen/config').get().then(function(cfgSnap){
+      if(cfgSnap.exists){
+        var cfg=cfgSnap.data();
+        if(window.applyConfig)window.applyConfig({adminPin:cfg.adminPin||'1234',techs:cfg.techs||[]});
+      }
+      if(window.showRoleScreen)window.showRoleScreen();
+    }).catch(function(){
+      if(window.showRoleScreen)window.showRoleScreen();
+    });
     // Listeners
     db.doc('plessen/inventory').onSnapshot(function(snap){
       if(!snap.exists||_ru)return;
@@ -490,6 +502,53 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 .inv-snt{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:5px}
 .inv-snt:hover{color:var(--blue)}.inv-snt.active{color:var(--blue);border-bottom-color:var(--blue)}
 .inv-sub-page{display:none}.inv-sub-page.active{display:block}
+
+/* ── ROLE SELECT SCREEN ── */
+#roleScreen{position:fixed;inset:0;background:var(--navy);z-index:9998;display:none;align-items:center;justify-content:center;padding:20px;flex-direction:column;gap:20px}
+.role-card{background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:400px;box-shadow:0 24px 64px rgba(0,0,0,.4)}
+.role-title{font-size:18px;font-weight:700;color:var(--navy);text-align:center;margin-bottom:6px}
+.role-sub{font-size:12px;color:var(--text3);text-align:center;margin-bottom:24px}
+.role-btns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.role-btn{padding:20px 12px;border-radius:var(--rl);border:2px solid var(--border);background:var(--surface);cursor:pointer;text-align:center;transition:all .15s}
+.role-btn:hover{border-color:var(--blue);background:var(--plight)}
+.role-btn .rb-icon{font-size:28px;margin-bottom:8px}
+.role-btn .rb-label{font-size:14px;font-weight:700;color:var(--navy)}
+.role-btn .rb-sub{font-size:11px;color:var(--text3);margin-top:3px}
+/* ── PIN ENTRY MODAL ── */
+#pinModal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9997;display:none;align-items:center;justify-content:center;padding:20px}
+.pin-card{background:#fff;border-radius:16px;padding:32px 28px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.pin-title{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px;text-align:center}
+.pin-sub{font-size:12px;color:var(--text3);text-align:center;margin-bottom:20px}
+.pin-input-wrap{position:relative;margin-bottom:14px}
+.pin-input{width:100%;padding:14px 16px;border:2px solid var(--border);border-radius:var(--r);font-size:22px;letter-spacing:8px;text-align:center;font-family:monospace;outline:none;color:var(--text);background:var(--bg);box-sizing:border-box}
+.pin-input:focus{border-color:var(--blue)}
+.pin-err{color:var(--danger);font-size:12px;text-align:center;min-height:16px;margin-bottom:10px;font-weight:500}
+.pin-actions{display:flex;gap:8px}
+.pin-scan-note{font-size:11px;color:var(--text3);text-align:center;margin-top:10px}
+/* ── TECH REMOVE UI ── */
+.tech-remove-item{background:var(--plight);border:2px solid var(--blue);border-radius:var(--rl);padding:16px;margin-bottom:14px;text-align:center}
+.tri-name{font-size:17px;font-weight:700;color:var(--navy)}
+.tri-meta{font-size:12px;color:var(--text2);margin-top:4px}
+.tri-qty{font-size:28px;font-weight:700;color:var(--blue);margin:10px 0 4px}
+.tri-qty-label{font-size:11px;color:var(--text3)}
+.scan-prompt{background:var(--surface2);border:1px dashed var(--border);border-radius:var(--r);padding:14px;text-align:center;font-size:13px;color:var(--text2);margin-bottom:14px}
+/* ── VERIFY MODAL (ID/PIN for tech removal) ── */
+#verifyModal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9996;display:none;align-items:center;justify-content:center;padding:20px}
+.verify-card{background:#fff;border-radius:16px;padding:28px 24px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.verify-item-name{font-size:15px;font-weight:700;color:var(--navy);text-align:center;margin-bottom:4px}
+.verify-mode-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.verify-tab{padding:10px;border-radius:var(--r);font-size:12px;font-weight:700;cursor:pointer;border:2px solid var(--border);background:var(--surface);color:var(--text2);text-align:center;transition:all .15s}
+.verify-tab.active{border-color:var(--blue);background:var(--plight);color:var(--blue)}
+/* ── SETTINGS MODAL ── */
+#settingsModal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.tech-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
+.tech-row:last-child{border-bottom:none}
+.tech-name-cell{flex:1;font-size:13px;font-weight:600;color:var(--text)}
+.tech-pin-cell{font-size:12px;color:var(--text3);font-family:monospace}
+/* ── ROLE BADGE IN HEADER ── */
+.role-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.role-badge.admin{background:rgba(180,83,9,.2);color:#b45309}
+.role-badge.tech{background:rgba(8,145,178,.2);color:#0891b2}
 </style>
 </head>
 <body>
@@ -538,10 +597,14 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
       <div id="syncDot" style="width:7px;height:7px;border-radius:50%;background:#60a5fa;animation:pulse2 1s infinite;flex-shrink:0"></div>
       <span id="syncStatus" style="font-size:11px;font-weight:600;color:rgba(255,255,255,.7)">Connecting…</span>
     </div>
+    <div id="roleBadge" class="role-badge" style="display:none"></div>
+    <button class="btn btn-w" id="settingsBtn" onclick="openSettings()" style="display:none" title="Settings">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
     <button class="btn btn-w" id="logoutBtn" onclick="window.doLogout()" style="display:none">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Logout
     </button>
-    <button class="btn btn-p" onclick="openTxModal()">
+    <button class="btn btn-p" id="newTxBtn" onclick="openTxModal()" style="display:none">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Transaction
     </button>
   </div>
@@ -550,11 +613,11 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
   <div class="nt active" onclick="showPage('inventory')">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Inventory
   </div>
-  <div class="nt" onclick="showPage('analytics')">
+  <div class="nt admin-only" id="nav-analytics" onclick="showPage('analytics')">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Analytics
     <span class="nbadge warn" id="restockBadge" style="display:none">0</span>
   </div>
-  <div class="nt" onclick="showPage('changelog')">
+  <div class="nt admin-only" id="nav-changelog" onclick="showPage('changelog')">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Change Log
     <span class="nbadge" id="clBadge" style="display:none">0</span>
   </div>
@@ -599,19 +662,9 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 
     <!-- INVENTORY LIST TAB -->
     <div class="inv-sub-page active" id="inv-page-list">
-      <!-- Scanner bar -->
-      <div class="scanner-bar" style="border-top:none;border-radius:0;background:rgba(13,45,94,.04);border-bottom:1px solid var(--border)">
-        <div class="sdot2" id="scanDot"></div>
-        <span style="font-size:12px;color:var(--text3)" id="scanStatusTxt">No scanner</span>
-        <input type="text" class="scan-live" id="scanLive" placeholder="Scan barcode…" onkeydown="onScanKey(event)" oninput="onScanInput(this.value)" style="background:var(--bg);color:var(--text);border-color:var(--border)">
-        <button class="btn-cam" id="camBtn" onclick="toggleCamera()" style="color:var(--text2);border-color:var(--border);background:var(--surface)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Camera
-        </button>
-        <button class="btn-devs" onclick="openDevModal()" style="color:var(--text2);border-color:var(--border);background:var(--surface)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>Connect Scanner
-        </button>
-      </div>
-      <div class="cam-wrap" id="camWrap">
+      <!-- Hidden scanner input (for USB/BT scanners) - moved camera to tx modal -->
+      <input type="text" class="scan-live" id="scanLive" placeholder="" onkeydown="onScanKey(event)" oninput="onScanInput(this.value)" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px">
+      <div class="cam-wrap" id="camWrap" style="display:none">
         <video id="camVideo" autoplay playsinline muted></video>
         <div class="cam-box"><div class="cam-finder"></div></div>
         <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap">Point at barcode — auto-captures</div>
@@ -968,6 +1021,21 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
               <input type="text" class="field-input" id="tx-add-search" placeholder="Type medication name or scan barcode…"
                 oninput="txAddSearch(this.value)" autocomplete="off"
                 style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:14px;font-family:var(--font);outline:none;background:var(--bg)">
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <button class="btn btn-s btn-sm" id="txCamBtn" onclick="toggleTxCamera()" style="flex:1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Camera
+              </button>
+              <button class="btn btn-s btn-sm" onclick="openDevModal()" style="flex:1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>Connect Scanner
+              </button>
+            </div>
+            <div class="cam-wrap" id="txCamWrap" style="display:none;margin-top:8px;border-radius:var(--r);overflow:hidden;position:relative;background:#000;min-height:200px">
+              <video id="txCamVideo" autoplay playsinline muted style="width:100%;display:block"></video>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+                <div style="width:200px;height:80px;border:2px solid #34d399;border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,.4)"></div>
+              </div>
+              <div class="cam-flash" id="txCamFlash"></div>
+            </div>
             </div>
             <div class="tx-results" id="tx-add-results" style="display:none"></div>
           </div>
@@ -1048,7 +1116,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
                   <input type="date" id="tx-new-expiry"/>
                   <div id="tx-new-expiry-note" class="expiry-req-note">Required when lot # is entered or category is Medications</div>
                 </div>
-                <div class="field"><label>Performed By</label><input type="text" id="tx-new-by" placeholder="Staff initials"/></div>
+                <div class="field"><label>Performed By</label><div id="tx-new-by-display" style="padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);font-size:13px;font-weight:600;color:var(--text)">—</div></div>
                 <div class="field full"><label>Notes</label><input type="text" id="tx-new-notes" placeholder="Invoice #, PO, supplier…"/></div>
               </div>
             </div>
@@ -1076,7 +1144,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
               <input type="date" id="tx-ex-expiry"/>
               <div id="tx-ex-expiry-note" class="expiry-req-note">Required when lot # is entered or item is a Medication</div>
             </div>
-            <div class="field"><label>Performed By</label><input type="text" id="tx-ex-by" placeholder="Staff initials"/></div>
+            <div class="field"><label>Performed By</label><div id="tx-ex-by-display" style="padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);font-size:13px;font-weight:600;color:var(--text)">—</div></div>
             <div class="field full"><label>Notes</label><input type="text" id="tx-ex-notes" placeholder="Invoice #, PO, supplier…"/></div>
           </div>
           <div style="display:flex;gap:8px;margin-top:14px">
@@ -1097,6 +1165,14 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
             <input type="text" id="tx-rem-search" placeholder="Type name or scan SKU…"
               oninput="txRemSearch(this.value)" autocomplete="off"
               style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:14px;font-family:var(--font);outline:none;background:var(--bg)">
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <button class="btn btn-s btn-sm" onclick="toggleTxCamera()" style="flex:1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Camera
+              </button>
+              <button class="btn btn-s btn-sm" onclick="openDevModal()" style="flex:1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>Connect Scanner
+              </button>
+            </div>
           </div>
           <div class="tx-results" id="tx-rem-results" style="display:none"></div>
         </div>
@@ -1352,6 +1428,17 @@ let aCharts={}, camStream=null, camOn=false, scanTO=null, wsBridge=null;
 let txMode='add', txSelectedItem=null, txSearchTerm='', txPathBSku='';
 // Item modal tag state
 let fSkus=[], fLots=[], txNewSkus=[];
+// ── ROLE / AUTH STATE ──
+let currentRole=null;   // 'admin' or 'tech'
+let currentTech=null;   // {name, pin, badgeId} for logged-in tech
+let appConfig={adminPin:'1234',techs:[]};  // loaded from Firestore
+let pinContext=null;    // what the pin modal is doing: 'admin'|'tech'
+let verifyContext=null; // pending removal after verification
+let verifyMode='pin';   // 'pin' or 'scan'
+let txCamStream=null;   // camera stream inside tx modal
+// Scan debounce
+let lastScanTime=0;
+const SCAN_COOLDOWN=1500; // ms between scans
 
 
 function setMode(m){} // stub - replaced by txModal
@@ -1381,7 +1468,8 @@ function loadAll(){
   catch(e){}return false;
 }
 function logChange(type,item,detail=''){
-  changeLog.unshift({type,item,detail,ts:new Date().toISOString(),id:Date.now()+Math.random()});
+  const by=getCurrentUserName?getCurrentUserName():'';
+  changeLog.unshift({type,item,detail,by,ts:new Date().toISOString(),id:Date.now()+Math.random()});
   if(changeLog.length>2000)changeLog.pop();
   updateBadges();
   // Re-render changelog page live if it's open
@@ -1681,20 +1769,27 @@ function onScanInput(val){
   scanTO=setTimeout(()=>{
     const code=val.trim();
     if(!code)return;
-    // Clear scanner input and main search bar
+    const now=Date.now();
+    if(now-lastScanTime<SCAN_COOLDOWN){
+      document.getElementById('scanLive').value='';return;
+    }
+    lastScanTime=now;
     document.getElementById('scanLive').value='';
     const si=document.getElementById('searchInput');if(si)si.value='';
-    // Always route to transaction modal with scanned value
-    const matches=findBySku(code);
-    const r=matches.length?matches[0]:null;
-    openTxModal(code);
-    if(r){
-      // Item found - auto-select after modal opens
-      setTimeout(()=>{txAddSelectItem(r);},200);
-    }
-  },280);
+    handleBarcodeScan(code);
+  },400);
 }
 function onScanKey(e){if(e.key==='Enter'){onScanInput(e.target.value);e.preventDefault();}}
+function handleBarcodeScan(code){
+  // If verify modal is open, treat as badge scan
+  const vm=document.getElementById('verifyModal');
+  if(vm&&vm.style.display!=='none'){verifyBadgeScan(code);return;}
+  // Route to transaction modal
+  const matches=findBySku(code);
+  const r=matches.length?matches[0]:null;
+  openTxModal(code);
+  if(r)setTimeout(()=>{txAddSelectItem(r);},200);
+}
 
 
 // ── CAMERA ──
@@ -1897,13 +1992,28 @@ function confirmDel(){if(deleteId){const r=inventory.find(x=>x.id===deleteId);if
 function openTxModal(prefilledSku){
   txMode='add';txSelectedItem=null;txSearchTerm=prefilledSku||'';txPathBSku='';txNewSkus=[];
   document.getElementById('txModal').classList.add('open');
-  setTxMode('add');
-  if(prefilledSku){
-    document.getElementById('tx-add-search').value=prefilledSku;
-    txAddSearch(prefilledSku);
+  if(currentRole==='tech'){
+    // Tech: only remove mode, pre-filled with scan
+    setTxMode('remove');
+    const rs=document.getElementById('tx-rem-search');
+    if(prefilledSku&&rs){rs.value=prefilledSku;txRemSearch(prefilledSku);}
+    else if(rs)setTimeout(()=>rs.focus(),80);
+    // Hide Add mode button for tech
+    const addBtn=document.getElementById('txModeAdd');
+    if(addBtn)addBtn.style.display='none';
   } else {
-    setTimeout(()=>{const el=document.getElementById('tx-add-search');if(el){el.value='';el.focus();}},80);
+    // Admin: full access
+    const addBtn=document.getElementById('txModeAdd');
+    if(addBtn)addBtn.style.display='';
+    setTxMode('add');
+    if(prefilledSku){
+      document.getElementById('tx-add-search').value=prefilledSku;
+      txAddSearch(prefilledSku);
+    } else {
+      setTimeout(()=>{const el=document.getElementById('tx-add-search');if(el){el.value='';el.focus();}},80);
+    }
   }
+  updateByDisplays();
 }
 function closeTxModal(){
   document.getElementById('txModal').classList.remove('open');
@@ -2087,7 +2197,7 @@ function txSaveNew(){
   const qty=parseFloat(document.getElementById('tx-new-qty').value)||0;
   const lot=document.getElementById('tx-new-lot').value.trim();
   const expiry=document.getElementById('tx-new-expiry').value;
-  const by=document.getElementById('tx-new-by').value.trim();
+  const by=getCurrentUserName();
   const notes=document.getElementById('tx-new-notes').value.trim();
   if(!name){showToast('Item name required','error');return;}
   if(!cat){showToast('Category required','error');return;}
@@ -2122,7 +2232,7 @@ function txSaveExisting(){
   const qty=parseFloat(document.getElementById('tx-ex-qty').value)||0;
   const lot=document.getElementById('tx-ex-lot').value.trim();
   const expiry=document.getElementById('tx-ex-expiry').value;
-  const by=document.getElementById('tx-ex-by').value.trim();
+  const by=getCurrentUserName();
   const notes=document.getElementById('tx-ex-notes').value.trim();
   const unit=document.getElementById('tx-ex-unit').value;
   if(qty<=0){showToast('Quantity must be > 0','error');return;}
@@ -2208,10 +2318,18 @@ function txRemClear(){
 }
 function txSaveRemove(){
   if(!txSelectedItem){showToast('No item selected','error');return;}
+  // Tech flow: 1 unit, used for patient, requires verification
+  if(currentRole==='tech'){
+    const lot=document.getElementById('tx-rem-lot').value;
+    const unit='units';
+    const remData={item:txSelectedItem.item,itemId:txSelectedItem.id,lot,unit};
+    openVerifyModal(remData);
+    return;
+  }
+  // Admin flow: full form
   const reasonCode=document.getElementById('tx-rem-reason').value;
   const qty=parseFloat(document.getElementById('tx-rem-qty').value)||0;
   const lot=document.getElementById('tx-rem-lot').value;
-  const by=document.getElementById('tx-rem-by').value.trim();
   const notes=document.getElementById('tx-rem-notes').value.trim();
   const unit=document.getElementById('tx-rem-unit').value;
   if(!reasonCode){showToast('Removal reason is required','error');document.getElementById('tx-rem-reason').focus();return;}
@@ -2415,7 +2533,7 @@ function renderChangelog(){
   if(!entries.length){body.innerHTML='<div class="empty">No changes in selected period.</div>';return;}
   const ico={add:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',qty:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>',del:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>'};
   const lbl={add:'Added',edit:'Edited',qty:'Qty Updated',del:'Deleted'};
-  body.innerHTML=entries.map(l=>{const d=new Date(l.ts);const ts=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});return`<div class="cl-e"><div class="cl-ic ${l.type}">${ico[l.type]||ico.edit}</div><div style="flex:1"><div style="font-size:13px;font-weight:600">${l.item||'Unknown'}</div><div style="font-size:11px;color:var(--text3)">${lbl[l.type]||l.type} · ${ts}</div>${l.detail?`<div style="font-size:12px;color:var(--text2);margin-top:2px;background:var(--bg);padding:3px 8px;border-radius:4px">${l.detail}</div>`:''}</div></div>`;}).join('');}
+  body.innerHTML=entries.map(l=>{const d=new Date(l.ts);const ts=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});return`<div class="cl-e"><div class="cl-ic ${l.type}">${ico[l.type]||ico.edit}</div><div style="flex:1"><div style="font-size:13px;font-weight:600">${l.item||'Unknown'}</div><div style="font-size:11px;color:var(--text3)">${lbl[l.type]||l.type} · ${ts}${l.by?' · '+l.by:''}</div>${l.detail?`<div style="font-size:12px;color:var(--text2);margin-top:2px;background:var(--bg);padding:3px 8px;border-radius:4px">${l.detail}</div>`:''}</div></div>`;}).join('');}
 
 
 // ═══ EXPORT ═══
@@ -2428,10 +2546,405 @@ function showToast(msg,type=''){const el=document.getElementById('toast');el.tex
 
 // ═══ KEYBOARD ═══
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeItemModal();closeLotModal();closeDelModal();closeDevModal();document.getElementById('bDelModal').classList.remove('open');stopCam();}
+  if(e.key==='Escape'){
+    closeItemModal();closeLotModal();closeDelModal();closeDevModal();
+    document.getElementById('bDelModal').classList.remove('open');
+    stopCam();stopTxCam();
+    closeSettings();
+  }
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();document.getElementById('searchInput').focus();document.getElementById('searchInput').select();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='t'){e.preventDefault();openTxModal();}
 });
 ['itemModal','lotModal','delModal','bDelModal','devModal','txModal'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});});
+
+
+// ═══════════════════════════════════════════════════
+// ── ROLE & AUTH SYSTEM ──
+// ═══════════════════════════════════════════════════
+
+// Called by Firebase module after login - show role screen
+window.showRoleScreen = function(){
+  document.getElementById('roleScreen').style.display='flex';
+};
+
+function selectRole(role){
+  document.getElementById('roleScreen').style.display='none';
+  if(role==='admin'){
+    // Show admin PIN entry
+    pinContext='admin';
+    document.getElementById('pinTitle').textContent='Admin PIN';
+    document.getElementById('pinSub').textContent='Enter your admin PIN to continue';
+    document.getElementById('pinScanNote').style.display='none';
+    document.getElementById('pinInput').value='';
+    document.getElementById('pinErr').textContent='';
+    document.getElementById('pinModal').style.display='flex';
+    setTimeout(()=>document.getElementById('pinInput').focus(),80);
+  } else {
+    // Tech - show PIN entry for identification
+    pinContext='tech';
+    document.getElementById('pinTitle').textContent='Staff Sign In';
+    document.getElementById('pinSub').textContent='Enter your PIN or scan your ID badge';
+    document.getElementById('pinScanNote').style.display='';
+    document.getElementById('pinInput').value='';
+    document.getElementById('pinErr').textContent='';
+    document.getElementById('pinModal').style.display='flex';
+    setTimeout(()=>document.getElementById('pinInput').focus(),80);
+  }
+}
+
+function pinInputChange(){
+  document.getElementById('pinErr').textContent='';
+}
+
+function pinCancel(){
+  document.getElementById('pinModal').style.display='none';
+  document.getElementById('roleScreen').style.display='flex';
+}
+
+function pinSubmit(){
+  const pin=document.getElementById('pinInput').value.trim();
+  if(!pin){document.getElementById('pinErr').textContent='Please enter your PIN.';return;}
+  if(pinContext==='admin'){
+    if(pin===appConfig.adminPin){
+      document.getElementById('pinModal').style.display='none';
+      activateRole('admin',null);
+    } else {
+      document.getElementById('pinErr').textContent='Incorrect PIN. Try again.';
+      document.getElementById('pinInput').value='';
+      document.getElementById('pinInput').focus();
+    }
+  } else {
+    // Tech identification by PIN
+    const tech=appConfig.techs.find(t=>t.pin===pin);
+    if(tech){
+      document.getElementById('pinModal').style.display='none';
+      activateRole('tech',tech);
+    } else {
+      document.getElementById('pinErr').textContent='PIN not recognised. Try again.';
+      document.getElementById('pinInput').value='';
+      document.getElementById('pinInput').focus();
+    }
+  }
+}
+
+// Also handle badge scan in PIN modal (for tech sign-in)
+function pinBadgeScan(badgeId){
+  if(pinContext!=='tech')return;
+  const tech=appConfig.techs.find(t=>t.badgeId&&t.badgeId===badgeId);
+  if(tech){
+    document.getElementById('pinModal').style.display='none';
+    activateRole('tech',tech);
+  } else {
+    document.getElementById('pinErr').textContent='Badge not recognised.';
+  }
+}
+
+function activateRole(role,tech){
+  currentRole=role;
+  currentTech=tech;
+  // Update UI
+  const badge=document.getElementById('roleBadge');
+  const adminEls=document.querySelectorAll('.admin-only');
+  const txBtn=document.getElementById('newTxBtn');
+  const settingsBtn=document.getElementById('settingsBtn');
+  if(role==='admin'){
+    badge.className='role-badge admin';
+    badge.innerHTML='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Admin';
+    badge.style.display='flex';
+    adminEls.forEach(el=>el.style.display='');
+    if(settingsBtn)settingsBtn.style.display='';
+    if(txBtn)txBtn.style.display='';
+  } else {
+    badge.className='role-badge tech';
+    badge.innerHTML='👤 '+tech.name;
+    badge.style.display='flex';
+    adminEls.forEach(el=>el.style.display='none');
+    if(settingsBtn)settingsBtn.style.display='none';
+    if(txBtn)txBtn.style.display='';
+    // Tech only sees remove in tx modal
+  }
+  // Update performed-by displays
+  updateByDisplays();
+  showPage('inventory');
+}
+
+function updateByDisplays(){
+  const name=currentRole==='admin'?'Admin':(currentTech?currentTech.name:'—');
+  ['tx-ex-by-display','tx-new-by-display'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.textContent=name;
+  });
+}
+
+function getCurrentUserName(){
+  if(currentRole==='admin')return'Admin';
+  if(currentTech)return currentTech.name;
+  return'—';
+}
+
+// ═══ CONFIG LOADING ═══
+window.loadConfig = function(){
+  // Called from Firebase after auth, loads tech list and admin PIN
+  if(!window._fbReady)return;
+  if(typeof db==='undefined')return;
+};
+
+window.applyConfig = function(cfg){
+  if(!cfg)return;
+  if(cfg.adminPin)appConfig.adminPin=cfg.adminPin;
+  if(cfg.techs)appConfig.techs=cfg.techs;
+};
+
+// ═══ VERIFY MODAL (tech removal authentication) ═══
+function openVerifyModal(removalData){
+  verifyContext=removalData;
+  verifyMode='pin';
+  document.getElementById('verifyPinInput').value='';
+  document.getElementById('verifyErr').textContent='';
+  document.getElementById('verifyScanErr').textContent='';
+  document.getElementById('verifyItemInfo').textContent=
+    'Removing 1 × '+(removalData.item||'item')+' — Used for patient';
+  setVerifyMode('pin');
+  document.getElementById('verifyModal').style.display='flex';
+  setTimeout(()=>document.getElementById('verifyPinInput').focus(),80);
+}
+
+function setVerifyMode(mode){
+  verifyMode=mode;
+  document.getElementById('vTabPin').classList.toggle('active',mode==='pin');
+  document.getElementById('vTabScan').classList.toggle('active',mode==='scan');
+  document.getElementById('verifyPinSection').style.display=mode==='pin'?'':'none';
+  document.getElementById('verifyScanSection').style.display=mode==='scan'?'':'none';
+  document.getElementById('verifySubmitBtn').style.display=mode==='pin'?'':'none';
+  if(mode==='pin')setTimeout(()=>document.getElementById('verifyPinInput').focus(),80);
+}
+
+function verifyBadgeScan(badgeId){
+  // Check if any tech has this badge ID
+  const tech=appConfig.techs.find(t=>t.badgeId&&t.badgeId===badgeId);
+  if(tech){
+    // Badge matches a tech - but must be the logged-in tech
+    if(currentTech&&tech.name===currentTech.name){
+      verifySuccess();
+    } else {
+      document.getElementById('verifyScanErr').textContent='Badge does not match your account.';
+    }
+  } else {
+    document.getElementById('verifyScanErr').textContent='Badge not recognised.';
+  }
+}
+
+function verifySubmit(){
+  if(verifyMode==='scan')return;
+  const pin=document.getElementById('verifyPinInput').value.trim();
+  if(!pin){document.getElementById('verifyErr').textContent='Enter your PIN.';return;}
+  if(currentTech&&pin===currentTech.pin){
+    verifySuccess();
+  } else {
+    document.getElementById('verifyErr').textContent='Incorrect PIN.';
+    document.getElementById('verifyPinInput').value='';
+    document.getElementById('verifyPinInput').focus();
+  }
+}
+
+function verifySuccess(){
+  document.getElementById('verifyModal').style.display='none';
+  if(verifyContext){
+    completeTechRemoval(verifyContext);
+    verifyContext=null;
+  }
+}
+
+function verifyCancel(){
+  document.getElementById('verifyModal').style.display='none';
+  verifyContext=null;
+}
+
+function completeTechRemoval(data){
+  // data: {item, itemId, lot, unit}
+  const idx=inventory.findIndex(r=>r.id===data.itemId);
+  if(idx<0){showToast('Item not found','error');return;}
+  const r=inventory[idx];
+  // Remove 1 unit from correct lot (FEFO)
+  if(data.lot&&r.lotDetails&&r.lotDetails.length){
+    const li=r.lotDetails.findIndex(l=>l.lot===data.lot);
+    if(li>-1){
+      const old=r.lotDetails[li].qty;
+      r.lotDetails[li].qty=Math.max(0,(parseFloat(old)||0)-1);
+      syncTotal(r);
+      logChange('qty',r.item,'Lot '+data.lot+': '+old+'→'+r.lotDetails[li].qty+' [Used for patient — '+getCurrentUserName()+']');
+    }
+  } else {
+    const old=parseFloat(r.quantity)||0;
+    r.quantity=Math.max(0,old-1);
+    r.reorder=r.quantity===0?'REORDER':'OK';
+    logChange('qty',r.item,'Qty:'+old+'→'+r.quantity+' [Used for patient — '+getCurrentUserName()+']');
+  }
+  const tx={id:Date.now()+Math.random(),mode:'remove',type:'use',reasonCode:'used_patient',
+    reasonLabel:'Used for patient',item:r.item,qty:1,unit:data.unit||'units',
+    lot:data.lot||'',by:getCurrentUserName(),
+    date:new Date().toISOString().slice(0,10),notes:'',ts:new Date().toISOString()};
+  transactions.unshift(tx);
+  saveAll();closeTxModal();applyFilters();
+  showToast('1 × '+r.item+' removed — Used for patient','warning');
+}
+
+// ═══ TX MODAL - ROLE-AWARE OPEN ═══
+// Override setTxMode for tech users (remove only, no qty)
+const _origSetTxMode = typeof setTxMode === 'function' ? setTxMode : null;
+
+// ═══ SETTINGS ═══
+function openSettings(){
+  if(currentRole!=='admin'){showToast('Admin access required','error');return;}
+  renderTechList();
+  document.getElementById('s-admin-pin-current').value='';
+  document.getElementById('s-admin-pin-new').value='';
+  document.getElementById('s-admin-pin-confirm').value='';
+  document.getElementById('s-admin-pin-err').textContent='';
+  hideAddTech();
+  document.getElementById('settingsModal').style.display='flex';
+}
+
+function closeSettings(){
+  document.getElementById('settingsModal').style.display='none';
+}
+
+function renderTechList(){
+  const el=document.getElementById('s-tech-list');
+  if(!el)return;
+  if(!appConfig.techs.length){
+    el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px 0">No staff members yet. Add one above.</div>';
+    return;
+  }
+  el.innerHTML=appConfig.techs.map((t,i)=>`
+    <div class="tech-row">
+      <div class="tech-name-cell">${t.name}</div>
+      <div class="tech-pin-cell">PIN: ${'•'.repeat(t.pin.length)}</div>
+      <div style="font-size:11px;color:var(--text3);flex:1">${t.badgeId?'Badge: '+t.badgeId.substring(0,8)+'…':''}</div>
+      <button class="btn btn-s btn-sm" onclick="editTech(${i})">Edit</button>
+      <button class="btn btn-d btn-sm" onclick="deleteTech(${i})">Delete</button>
+    </div>`).join('');
+}
+
+function showAddTech(){
+  document.getElementById('s-add-tech-form').style.display='';
+  document.getElementById('s-tech-name').value='';
+  document.getElementById('s-tech-pin').value='';
+  document.getElementById('s-tech-badge').value='';
+  document.getElementById('s-add-tech-err').textContent='';
+  setTimeout(()=>document.getElementById('s-tech-name').focus(),80);
+}
+
+function hideAddTech(){
+  document.getElementById('s-add-tech-form').style.display='none';
+}
+
+function saveTech(){
+  const name=document.getElementById('s-tech-name').value.trim();
+  const pin=document.getElementById('s-tech-pin').value.trim();
+  const badge=document.getElementById('s-tech-badge').value.trim();
+  if(!name){document.getElementById('s-add-tech-err').textContent='Name is required.';return;}
+  if(!pin){document.getElementById('s-add-tech-err').textContent='PIN is required.';return;}
+  if(appConfig.techs.find(t=>t.pin===pin)){
+    document.getElementById('s-add-tech-err').textContent='That PIN is already in use.';return;
+  }
+  appConfig.techs.push({name,pin,badgeId:badge});
+  saveConfig();
+  renderTechList();
+  hideAddTech();
+  showToast('Staff member added: '+name,'success');
+}
+
+function deleteTech(idx){
+  if(!confirm('Remove '+appConfig.techs[idx].name+' from staff list?'))return;
+  appConfig.techs.splice(idx,1);
+  saveConfig();
+  renderTechList();
+}
+
+function editTech(idx){
+  const t=appConfig.techs[idx];
+  showAddTech();
+  document.getElementById('s-tech-name').value=t.name;
+  document.getElementById('s-tech-pin').value=t.pin;
+  document.getElementById('s-tech-badge').value=t.badgeId||'';
+  // Remove old entry when saved
+  appConfig.techs.splice(idx,1);
+}
+
+function saveAdminPin(){
+  const cur=document.getElementById('s-admin-pin-current').value.trim();
+  const nw=document.getElementById('s-admin-pin-new').value.trim();
+  const cf=document.getElementById('s-admin-pin-confirm').value.trim();
+  const err=document.getElementById('s-admin-pin-err');
+  if(cur!==appConfig.adminPin){err.textContent='Current PIN is incorrect.';return;}
+  if(!nw){err.textContent='New PIN cannot be empty.';return;}
+  if(nw!==cf){err.textContent='PINs do not match.';return;}
+  appConfig.adminPin=nw;
+  saveConfig();
+  err.style.color='var(--okm)';err.textContent='Admin PIN updated.';
+  document.getElementById('s-admin-pin-current').value='';
+  document.getElementById('s-admin-pin-new').value='';
+  document.getElementById('s-admin-pin-confirm').value='';
+  setTimeout(()=>{err.textContent='';err.style.color='var(--danger)';},3000);
+}
+
+function saveConfig(){
+  // Save to Firestore via window.fbSaveConfig
+  if(window.fbSaveConfig)window.fbSaveConfig(appConfig);
+}
+
+// ═══ TX CAMERA (inside modal) ═══
+let txCamDetector=null, txCamFrame=null;
+async function toggleTxCamera(){
+  const btn=document.getElementById('txCamBtn');
+  const wrap=document.getElementById('txCamWrap');
+  if(!wrap)return;
+  if(txCamStream){stopTxCam();if(btn)btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Camera';return;}
+  try{
+    txCamStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    const vid=document.getElementById('txCamVideo');
+    vid.srcObject=txCamStream;
+    wrap.style.display='';
+    if(btn)btn.innerHTML='⏹ Stop Camera';
+    startTxDetect(vid);
+  }catch(e){showToast('Camera not available','error');}
+}
+
+function stopTxCam(){
+  if(txCamStream){txCamStream.getTracks().forEach(t=>t.stop());txCamStream=null;}
+  cancelAnimationFrame(txCamFrame);
+  const wrap=document.getElementById('txCamWrap');if(wrap)wrap.style.display='none';
+}
+
+function startTxDetect(vid){
+  if('BarcodeDetector' in window){
+    const det=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e']});
+    let lastCode='',lastTime=0;
+    function detect(){
+      txCamFrame=requestAnimationFrame(detect);
+      if(vid.readyState<2)return;
+      det.detect(vid).then(codes=>{
+        if(!codes.length)return;
+        const code=codes[0].rawValue;
+        const now=Date.now();
+        if(code===lastCode&&now-lastTime<SCAN_COOLDOWN)return;
+        lastCode=code;lastTime=now;
+        const fl=document.getElementById('txCamFlash');
+        if(fl){fl.classList.add('flash');setTimeout(()=>fl.classList.remove('flash'),300);}
+        stopTxCam();
+        // Fill the active search input
+        const addSearch=document.getElementById('tx-add-search');
+        const remSearch=document.getElementById('tx-rem-search');
+        const activeSearch=document.getElementById('tx-rem-flow')&&document.getElementById('tx-rem-flow').style.display!=='none'?remSearch:addSearch;
+        if(activeSearch){activeSearch.value=code;activeSearch.dispatchEvent(new Event('input'));}
+      }).catch(()=>{});
+    }
+    detect();
+  } else {
+    showToast('Camera scanning not supported in this browser','warning');
+  }
+}
+
 
 // ═══ BOOT ═══
 // Expose functions so Firebase module can call them after data loads
@@ -2440,6 +2953,8 @@ window.ML_DEFAULTS = ML_DEFAULTS;
 window.updateBadges = updateBadges;
 window.renderChangelog = renderChangelog;
 window.renderHistPanel = renderHistPanel;
+window.showRoleScreen = showRoleScreen;
+window.applyConfig = applyConfig;
 window.applyFilters = applyFilters;
 window.logChange = logChange;
 window.saveAll = saveAll;
@@ -2450,6 +2965,8 @@ window.findItems = findItems;
 window.findBySku = findBySku;
 window.renderChangelog = renderChangelog;
 window.renderHistPanel = renderHistPanel;
+window.showRoleScreen = showRoleScreen;
+window.applyConfig = applyConfig;
 // localFallbackBoot: used if Firebase fails - seeds from RAW and boots UI
 window.localFallbackBoot = function(){
   if(!window.inventory.length){
@@ -2484,6 +3001,127 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
 
 
 </script>
+
+<!-- ROLE SELECT SCREEN -->
+<div id="roleScreen" style="display:none">
+  <div class="role-card">
+    <div class="role-title">Welcome to Plessen Inventory</div>
+    <div class="role-sub">Select your role to continue</div>
+    <div class="role-btns">
+      <div class="role-btn" onclick="selectRole('admin')">
+        <div class="rb-icon">🔑</div>
+        <div class="rb-label">Admin</div>
+        <div class="rb-sub">Full access</div>
+      </div>
+      <div class="role-btn" onclick="selectRole('tech')">
+        <div class="rb-icon">👤</div>
+        <div class="rb-label">Staff</div>
+        <div class="rb-sub">Inventory & removal</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PIN MODAL (admin login + tech identification) -->
+<div id="pinModal" style="display:none">
+  <div class="pin-card">
+    <div class="pin-title" id="pinTitle">Enter PIN</div>
+    <div class="pin-sub" id="pinSub">Enter your PIN to continue</div>
+    <div class="pin-input-wrap">
+      <input type="password" class="pin-input" id="pinInput" maxlength="12" inputmode="numeric"
+        placeholder="••••" oninput="pinInputChange()" onkeydown="if(event.key==='Enter')pinSubmit()">
+    </div>
+    <div class="pin-err" id="pinErr"></div>
+    <div class="pin-actions">
+      <button class="btn btn-s" style="flex:1" onclick="pinCancel()">← Back</button>
+      <button class="btn btn-p" style="flex:1" onclick="pinSubmit()">Continue →</button>
+    </div>
+    <div class="pin-scan-note" id="pinScanNote">Or scan your ID badge</div>
+  </div>
+</div>
+
+<!-- VERIFY MODAL (tech must authenticate before completing removal) -->
+<div id="verifyModal" style="display:none">
+  <div class="verify-card">
+    <div class="pin-title">Verify Identity</div>
+    <div id="verifyItemInfo" style="text-align:center;font-size:13px;color:var(--text2);margin-bottom:16px"></div>
+    <div class="verify-mode-tabs">
+      <div class="verify-tab active" id="vTabPin" onclick="setVerifyMode('pin')">Enter PIN</div>
+      <div class="verify-tab" id="vTabScan" onclick="setVerifyMode('scan')">Scan ID Badge</div>
+    </div>
+    <div id="verifyPinSection">
+      <input type="password" class="pin-input" id="verifyPinInput" maxlength="12" inputmode="numeric"
+        placeholder="••••" onkeydown="if(event.key==='Enter')verifySubmit()">
+      <div class="pin-err" id="verifyErr"></div>
+    </div>
+    <div id="verifyScanSection" style="display:none">
+      <div class="scan-prompt">
+        <div style="font-size:20px;margin-bottom:6px">🪪</div>
+        Scan your ID badge now
+      </div>
+      <div class="pin-err" id="verifyScanErr"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-s" style="flex:1" onclick="verifyCancel()">← Back</button>
+      <button class="btn btn-p" style="flex:1" id="verifySubmitBtn" onclick="verifySubmit()">Confirm Removal</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL (admin only) -->
+<div id="settingsModal" style="display:none">
+  <div class="md md-lg">
+    <div class="mh">
+      <span class="mt2">Settings & User Management</span>
+      <button class="mc" onclick="closeSettings()">×</button>
+    </div>
+    <div class="mb">
+      <!-- Admin PIN section -->
+      <div style="margin-bottom:22px">
+        <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">Admin PIN</div>
+        <div class="fg">
+          <div class="field">
+            <label>Current PIN</label>
+            <input type="password" id="s-admin-pin-current" placeholder="Current admin PIN" style="width:100%"/>
+          </div>
+          <div class="field">
+            <label>New PIN</label>
+            <input type="password" id="s-admin-pin-new" placeholder="New PIN" style="width:100%"/>
+          </div>
+          <div class="field">
+            <label>Confirm New PIN</label>
+            <input type="password" id="s-admin-pin-confirm" placeholder="Confirm new PIN" style="width:100%"/>
+          </div>
+        </div>
+        <div id="s-admin-pin-err" style="color:var(--danger);font-size:12px;min-height:16px"></div>
+        <button class="btn btn-p btn-sm" onclick="saveAdminPin()" style="margin-top:8px">Update Admin PIN</button>
+      </div>
+      <!-- Tech list -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:700;color:var(--navy)">Staff Members</div>
+          <button class="btn btn-p btn-sm" onclick="showAddTech()">+ Add Staff</button>
+        </div>
+        <div id="s-tech-list"></div>
+        <!-- Add tech form -->
+        <div id="s-add-tech-form" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-top:12px">
+          <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px">New Staff Member</div>
+          <div class="fg">
+            <div class="field full"><label>Full Name *</label><input type="text" id="s-tech-name" placeholder="e.g. Jane Smith"/></div>
+            <div class="field"><label>PIN *</label><input type="password" id="s-tech-pin" placeholder="4–8 digits"/></div>
+            <div class="field"><label>Badge ID</label><input type="text" id="s-tech-badge" placeholder="Badge barcode/number"/></div>
+          </div>
+          <div id="s-add-tech-err" style="color:var(--danger);font-size:12px;min-height:16px"></div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-s btn-sm" onclick="hideAddTech()">Cancel</button>
+            <button class="btn btn-p btn-sm" onclick="saveTech()">Save Staff Member</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </div><!-- /mainApp -->
 </body>
 </html>
