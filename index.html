@@ -596,6 +596,171 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
   font-size:13px;color:#34d399;font-weight:600;min-height:20px;
   text-align:center;letter-spacing:.02em
 }
+
+/* ══════════════════════════════════════════
+   MOBILE — phone-first responsive (≤480px)
+   ══════════════════════════════════════════ */
+
+/* Bottom nav bar on mobile */
+@media(max-width:480px){
+  /* Layout */
+  .wrap{padding:8px 8px 80px}
+  body{padding-bottom:64px}
+
+  /* Header — compact */
+  .hdr{padding:0 10px;height:52px}
+  .brand-name{font-size:13px}
+  .brand-sub{display:none}
+  .logo-box{width:30px;height:30px}
+  .logo-box svg{width:20px;height:20px}
+  .sync-pill{padding:3px 7px}
+  #syncStatus{display:none}
+  .role-badge{font-size:10px;padding:3px 7px}
+  #settingsBtn span,.hdr-r .btn span{display:none}
+
+  /* Hide top nav — replaced by bottom bar */
+  .nav{display:none}
+
+  /* Bottom nav bar */
+  .mobile-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;
+    background:var(--navy);z-index:300;
+    border-top:1px solid rgba(255,255,255,.1);
+    height:60px;align-items:stretch
+  }
+  .mobile-nav-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:3px;color:rgba(255,255,255,.5);
+    font-size:10px;font-weight:600;cursor:pointer;
+    border:none;background:none;padding:0;
+    transition:color .15s;border-top:2px solid transparent
+  }
+  .mobile-nav-btn svg{width:18px;height:18px}
+  .mobile-nav-btn.active{color:#fff;border-top-color:#60a5fa}
+  .mobile-nav-btn .mnb-badge{
+    position:absolute;top:8px;right:calc(50% - 16px);
+    background:#b91c1c;color:#fff;border-radius:8px;
+    font-size:9px;padding:1px 4px;font-weight:700
+  }
+
+  /* Stats — 2×2 grid */
+  .stats{grid-template-columns:1fr 1fr!important;gap:8px;margin-bottom:12px}
+  .sc{padding:10px 12px}
+  .sv{font-size:20px}
+  .sl{font-size:10px}
+  .sc-link{display:none}
+  .sc-sub{font-size:10px}
+
+  /* Toolbar — collapse filters */
+  .tb{padding:8px;gap:6px;flex-wrap:nowrap}
+  .sw-wrap{flex:1;min-width:0}
+  .tb select,.tb button:not(.tb-filter-btn){display:none}
+  .tb .tb-filter-btn{display:flex}
+  #perPage{display:none!important}
+
+  /* Filter drawer */
+  .filter-drawer{
+    display:none;position:fixed;inset:0;z-index:450;
+    background:rgba(0,0,0,.5)
+  }
+  .filter-drawer.open{display:block}
+  .filter-panel{
+    position:absolute;bottom:0;left:0;right:0;
+    background:var(--surface);border-radius:16px 16px 0 0;
+    padding:20px 16px 32px;max-height:70vh;overflow-y:auto
+  }
+  .filter-panel h3{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:14px}
+  .filter-row{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+  .filter-row label{font-size:11px;font-weight:600;color:var(--text2)}
+  .filter-row select{width:100%;padding:9px 10px;border:1px solid var(--border);
+    border-radius:var(--r);font-size:14px;font-family:var(--font)}
+
+  /* Table — only show key columns */
+  .hm{display:none!important}
+  table th:first-child,table td:first-child{display:none}
+  .tb-col-price,.tb-col-vendor,.tb-col-cat{display:none}
+  td,th{padding:8px 6px;font-size:12px}
+  .iname{max-width:none;font-size:13px}
+  table{font-size:12px}
+
+  /* Modals — full screen on mobile */
+  .mo{padding:0;align-items:flex-end}
+  .md,.md-lg{border-radius:16px 16px 0 0;max-width:100%;max-height:92vh;
+    overflow-y:auto;width:100%}
+  .mh{padding:14px 16px 12px}
+  .mb{padding:12px 14px}
+  .mf{padding:10px 14px}
+  .fg{grid-template-columns:1fr!important}
+
+  /* Transaction modal — full bottom sheet */
+  .tx-mode-row{grid-template-columns:1fr 1fr}
+  .tx-path-grid{grid-template-columns:1fr 1fr}
+
+  /* Lot panel */
+  .lot-panel{padding:8px}
+
+  /* Analytics sub-nav — scrollable */
+  .sub-nav{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .snt{padding:8px 12px;font-size:11px;white-space:nowrap}
+
+  /* Hide analytics charts column overflow */
+  .ach{height:180px!important}
+  .ac{padding:10px}
+
+  /* PIN / Verify modals — always centered */
+  #pinModal,#verifyModal{align-items:center;padding:16px}
+  .pin-card,.verify-card{border-radius:14px}
+
+  /* Settings — full bottom sheet */
+  #settingsModal{padding:0;align-items:flex-end}
+  #settingsModal .md{border-radius:16px 16px 0 0;max-height:90vh}
+
+  /* Camera overlay */
+  .tx-cam-viewport{width:95vw}
+
+  /* New Transaction button — icon only */
+  #newTxBtn .btn-label{display:none}
+
+  /* Inv sub nav */
+  .inv-sub-nav{border-radius:0}
+  .inv-snt{padding:10px 14px;font-size:12px}
+}
+
+/* Tablet (481–768px) — minor adjustments */
+@media(min-width:481px) and (max-width:768px){
+  .mobile-nav{display:none}
+  .wrap{padding:12px}
+  .stats{grid-template-columns:repeat(2,1fr)!important}
+  .tb select{font-size:11px;padding:5px 6px}
+  .fg{grid-template-columns:1fr 1fr}
+}
+
+/* Always hide mobile-nav on desktop */
+@media(min-width:481px){
+  .mobile-nav{display:none}
+  .filter-drawer{display:none!important}
+  .tb-filter-btn{display:none!important}
+}
+
+/* Mobile table — card-style rows */
+@media(max-width:480px){
+  .inv-row td:nth-child(2){
+    /* Status badge — show inline */
+    display:table-cell
+  }
+  /* Qty cell — larger and prominent */
+  .inv-row td:nth-child(5) strong{
+    font-size:18px
+  }
+  /* Actions — compact */
+  .abts{flex-wrap:wrap;gap:3px}
+  .ib{width:26px;height:26px}
+  /* Lot panel full width */
+  .lot-sub-row td{padding:0}
+  .lot-panel{border-radius:0}
+  /* Stats card value smaller on very small screens */
+  .sv{font-size:18px}
+}
 </style>
 </head>
 <body>
@@ -652,7 +817,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Logout
     </button>
     <button class="btn btn-p" id="newTxBtn" onclick="openTxModal()" style="display:none">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New Transaction
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span class="btn-label">New Transaction</span>
     </button>
   </div>
 </div>
@@ -669,6 +834,83 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
     <span class="nbadge" id="clBadge" style="display:none">0</span>
   </div>
 </div>
+
+<!-- MOBILE BOTTOM NAV -->
+<div class="mobile-nav" id="mobileNav">
+  <button class="mobile-nav-btn active" id="mn-inventory" onclick="mobileNav('inventory')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+    </svg>
+    Inventory
+  </button>
+  <button class="mobile-nav-btn admin-only" id="mn-analytics" onclick="mobileNav('analytics')" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+    Analytics
+    <span class="mnb-badge" id="mn-restock-badge" style="display:none">!</span>
+  </button>
+  <button class="mobile-nav-btn admin-only" id="mn-changelog" onclick="mobileNav('changelog')" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+    </svg>
+    Log
+    <span class="mnb-badge" id="mn-cl-badge" style="display:none">!</span>
+  </button>
+  <button class="mobile-nav-btn" onclick="openTxModal()" id="mn-tx">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    Add / Remove
+  </button>
+</div>
+
+<!-- FILTER DRAWER (mobile) -->
+<div class="filter-drawer" id="filterDrawer" onclick="if(event.target===this)closeFilterDrawer()">
+  <div class="filter-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 style="margin:0">Filters</h3>
+      <button onclick="closeFilterDrawer()" style="width:28px;height:28px;border-radius:6px;background:#b91c1c;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer">×</button>
+    </div>
+    <div class="filter-row">
+      <label>Category</label>
+      <select id="fCat-m" onchange="syncMobileFilter('fCat','fCat-m')">
+        <option value="">All Categories</option>
+        <option>Medications</option><option>Supplies</option>
+        <option>Equipment</option><option>Instruments</option><option>Other</option>
+      </select>
+    </div>
+    <div class="filter-row">
+      <label>Status</label>
+      <select id="fStatus-m" onchange="syncMobileFilter('fStatus','fStatus-m')">
+        <option value="">All Status</option>
+        <option value="OK">In Stock</option>
+        <option value="REORDER">Reorder</option>
+      </select>
+    </div>
+    <div class="filter-row">
+      <label>Vendor</label>
+      <select id="fVendor-m" onchange="syncMobileFilter('fVendor','fVendor-m')">
+        <option value="">All Vendors</option>
+      </select>
+    </div>
+    <div class="filter-row">
+      <label>Sort by</label>
+      <select id="sortSel-m" onchange="syncMobileFilter('sortSel','sortSel-m');applySortSel()">
+        <option value="item|1">Name A→Z</option>
+        <option value="item|-1">Name Z→A</option>
+        <option value="reorder|1">Status</option>
+        <option value="quantity|1">Qty Low→High</option>
+        <option value="quantity|-1">Qty High→Low</option>
+        <option value="category|1">Category</option>
+      </select>
+    </div>
+    <button class="btn btn-p" style="width:100%;margin-top:8px" onclick="closeFilterDrawer()">Apply Filters</button>
+  </div>
+</div>
+
 <div class="wrap">
 
 <!-- INVENTORY PAGE -->
@@ -738,8 +980,12 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
       <div class="tb" style="border-radius:0;border-top:none">
         <div class="sw-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input type="text" class="si" placeholder="Search name, SKU, vendor… (Ctrl+K)" id="searchInput" oninput="applyFilters()">
+          <input type="text" class="si" placeholder="Search…" id="searchInput" oninput="applyFilters()">
         </div>
+        <button class="btn btn-s tb-filter-btn" onclick="openFilterDrawer()" style="display:none;flex-shrink:0">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+          Filter
+        </button>
         <select id="fCat" onchange="applyFilters()"><option value="">All Categories</option><option>Medications</option><option>Supplies</option><option>Equipment</option><option>Instruments</option><option>Other</option></select>
         <select id="fStatus" onchange="applyFilters()"><option value="">All Status</option><option value="OK">In Stock</option><option value="REORDER">Reorder</option></select>
         <select id="fVendor" onchange="applyFilters()"><option value="">All Vendors</option></select>
@@ -3151,6 +3397,81 @@ function startTxDetect(vid){
   detect();
 }
 
+
+
+// ═══ MOBILE NAV & FILTERS ═══
+function mobileNav(page){
+  // Update bottom nav active state
+  ['inventory','analytics','changelog'].forEach(p=>{
+    const btn=document.getElementById('mn-'+p);
+    if(btn)btn.classList.toggle('active',p===page);
+  });
+  showPage(page);
+}
+
+function openFilterDrawer(){
+  // Sync desktop selects → mobile selects
+  ['fCat','fStatus','fVendor','sortSel'].forEach(id=>{
+    const desk=document.getElementById(id);
+    const mob=document.getElementById(id+'-m');
+    if(desk&&mob)mob.value=desk.value;
+  });
+  // Sync vendor options
+  const dv=document.getElementById('fVendor');
+  const mv=document.getElementById('fVendor-m');
+  if(dv&&mv){mv.innerHTML=dv.innerHTML;}
+  document.getElementById('filterDrawer').classList.add('open');
+}
+
+function closeFilterDrawer(){
+  document.getElementById('filterDrawer').classList.remove('open');
+}
+
+function syncMobileFilter(desktopId,mobileId){
+  const mob=document.getElementById(mobileId);
+  const desk=document.getElementById(desktopId);
+  if(mob&&desk){desk.value=mob.value;applyFilters();}
+}
+
+// Update mobile nav badges when updateBadges runs
+const _origUpdateBadges=updateBadges;
+function updateBadges(){
+  _origUpdateBadges();
+  // Sync badges to mobile nav
+  const rb=document.getElementById('restockBadge');
+  const mnrb=document.getElementById('mn-restock-badge');
+  if(rb&&mnrb){
+    mnrb.style.display=rb.style.display;
+    mnrb.textContent=rb.textContent;
+  }
+  const cb=document.getElementById('clBadge');
+  const mncb=document.getElementById('mn-cl-badge');
+  if(cb&&mncb){
+    mncb.style.display=cb.style.display;
+    mncb.textContent=cb.textContent;
+  }
+}
+
+// Keep mobile nav in sync when showPage is called
+const _origShowPage=showPage;
+function showPage(name){
+  _origShowPage(name);
+  // Update mobile bottom nav
+  ['inventory','analytics','changelog'].forEach(p=>{
+    const btn=document.getElementById('mn-'+p);
+    if(btn)btn.classList.toggle('active',p===name);
+  });
+}
+
+// Show/hide admin-only mobile nav items based on role
+const _origActivateRole=activateRole;
+function activateRole(role,tech){
+  _origActivateRole(role,tech);
+  // Update mobile nav admin visibility
+  document.querySelectorAll('.mobile-nav .admin-only').forEach(el=>{
+    el.style.display=role==='admin'?'':'none';
+  });
+}
 
 // ═══ BOOT ═══
 // Expose functions so Firebase module can call them after data loads
