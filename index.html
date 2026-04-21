@@ -56,6 +56,7 @@ window.fbSaveConfig=function(cfg){
   if(!db)return;
   db.doc('plessen/config').set(cfg).catch(function(e){console.error('config save:',e);});
 };
+
 // Immediately write just the changelog document (called from logChange)
 window.fbSaveChangelog=function(){
   if(!window._fbReady||!db)return;
@@ -100,21 +101,20 @@ function fbLoad(){
     mutArr(window.inventory,mig);
     if(dirty)window.fbSave();
     setSS('synced');
+    setSS('synced');
     window._fbReady=true;
     // Load config then route by email
     db.doc('plessen/config').get().then(function(cfgSnap){
-      var cfg={adminPin:'1234',techs:[]};
-      if(cfgSnap.exists&&cfgSnap.data()&&cfgSnap.data().adminPin){
-        cfg.adminPin=cfgSnap.data().adminPin;
+      var cfg={adminPinHash:'',techs:[]};
+      if(cfgSnap.exists&&cfgSnap.data()){
+        cfg.adminPinHash=cfgSnap.data().adminPinHash||'';
         cfg.techs=cfgSnap.data().techs||[];
       }
       if(window.applyConfig)window.applyConfig(cfg);
       var email=window._authEmail||'';
       if(email==='anthony.jolly@plesseneye.com'){
         if(window.activateRole)window.activateRole('admin',null);
-        // activateRole calls updateBadges+applyFilters internally
       } else if(email==='examuser@plesseneye.com'){
-        // Tech: show PIN screen, activateRole called after PIN entry
         if(window.updateBadges)window.updateBadges();
         if(window.applyFilters)window.applyFilters();
         if(window.showTechPinScreen)window.showTechPinScreen();
@@ -566,6 +566,52 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 .role-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700}
 .role-badge.admin{background:rgba(180,83,9,.2);color:#b45309}
 .role-badge.tech{background:rgba(8,145,178,.2);color:#0891b2}
+
+/* ── TX CAMERA OVERLAY (floating over modal) ── */
+#txCamOverlay{
+  position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px
+}
+.tx-cam-viewport{
+  position:relative;width:min(90vw,420px);border-radius:14px;overflow:hidden;
+  box-shadow:0 0 0 2px rgba(255,255,255,.15);background:#000
+}
+.tx-cam-viewport video{width:100%;display:block;max-height:60vh;object-fit:cover}
+.tx-cam-reticle{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  pointer-events:none
+}
+.tx-cam-box{
+  width:72%;max-width:280px;aspect-ratio:3/1;
+  border:2px solid #34d399;border-radius:8px;
+  box-shadow:0 0 0 2000px rgba(0,0,0,.45);
+  position:relative
+}
+.tx-cam-box::before,.tx-cam-box::after{
+  content:'';position:absolute;width:16px;height:16px;border-color:#34d399;border-style:solid
+}
+.tx-cam-box::before{top:-2px;left:-2px;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
+.tx-cam-box::after{bottom:-2px;right:-2px;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
+.tx-cam-label{
+  font-size:13px;color:rgba(255,255,255,.8);text-align:center;
+  letter-spacing:.02em;margin-top:2px
+}
+.tx-cam-flash-overlay{
+  position:absolute;inset:0;background:#fff;opacity:0;
+  transition:opacity .15s;pointer-events:none;border-radius:14px
+}
+.tx-cam-flash-overlay.flash{opacity:.7}
+.tx-cam-close{
+  width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);
+  border:2px solid rgba(255,255,255,.3);color:#fff;font-size:20px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:background .15s;
+  flex-shrink:0
+}
+.tx-cam-close:hover{background:rgba(185,28,28,.8)}
+.tx-cam-result{
+  font-size:13px;color:#34d399;font-weight:600;min-height:20px;
+  text-align:center;letter-spacing:.02em
+}
 </style>
 </head>
 <body>
@@ -1046,13 +1092,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>Connect Scanner
               </button>
             </div>
-            <div class="cam-wrap" id="txCamWrap" style="display:none;margin-top:8px;border-radius:var(--r);overflow:hidden;position:relative;background:#000;min-height:200px;z-index:10">
-              <video id="txCamVideo" autoplay playsinline muted style="width:100%;display:block"></video>
-              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-                <div style="width:200px;height:80px;border:2px solid #34d399;border-radius:8px;box-shadow:0 0 0 2000px rgba(0,0,0,.4)"></div>
-              </div>
-              <div class="cam-flash" id="txCamFlash"></div>
-            </div>
+
             </div>
             <div class="tx-results" id="tx-add-results" style="display:none"></div>
           </div>
@@ -1447,8 +1487,8 @@ let txMode='add', txSelectedItem=null, txSearchTerm='', txPathBSku='';
 let fSkus=[], fLots=[], txNewSkus=[];
 // ── ROLE / AUTH STATE ──
 let currentRole=null;   // 'admin' or 'tech'
-let currentTech=null;   // {name, pin, badgeId} for logged-in tech
-let appConfig={adminPin:'1234',techs:[]};  // loaded from Firestore
+let currentTech=null;   // {name, pin, badgeId, pinHash} for logged-in tech
+let appConfig={adminPinHash:'',techs:[]};  // loaded from Firestore
 let pinContext=null;    // what the pin modal is doing: 'admin'|'tech'
 let verifyContext=null; // pending removal after verification
 let verifyMode='pin';   // 'pin' or 'scan'
@@ -1456,6 +1496,38 @@ let txCamStream=null;   // camera stream inside tx modal
 // Scan debounce
 let lastScanTime=0;
 const SCAN_COOLDOWN=1500; // ms between scans
+// ── PIN LOCKOUT ──
+const PIN_MAX_ATTEMPTS=3;
+const PIN_LOCKOUT_BASE_MS=60000; // 60 seconds base
+let pinAttempts=0;         // wrong attempts on current screen
+let pinLockedUntil=0;      // timestamp when lockout expires
+let pinLockoutCount=0;     // how many times locked out (doubles cooldown)
+let verifyAttempts=0;      // wrong attempts on verify screen
+let verifyLockedUntil=0;
+let verifyLockoutCount=0;  // how many times locked out on verify
+
+// ── WEB CRYPTO HASHING (PBKDF2 — 100,000 iterations) ──
+// PBKDF2 is purpose-built for passwords/PINs. Each hash attempt requires
+// 100,000 SHA-256 rounds, making brute-force attacks ~100,000x harder than
+// plain SHA-256. Built into all modern browsers via Web Crypto API.
+async function hashPin(pin){
+  const enc=new TextEncoder();
+  const keyMaterial=await crypto.subtle.importKey(
+    'raw',enc.encode(pin),'PBKDF2',false,['deriveBits']
+  );
+  const bits=await crypto.subtle.deriveBits({
+    name:'PBKDF2',
+    salt:enc.encode('plessen_ophthalmic_2025'),
+    iterations:100000,
+    hash:'SHA-256'
+  },keyMaterial,256);
+  return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function checkPin(pin,storedHash){
+  if(!storedHash)return false;
+  const h=await hashPin(pin);
+  return h===storedHash;
+}
 
 
 function setMode(m){} // stub - replaced by txModal
@@ -2589,8 +2661,9 @@ function selectRole(role){
   showTechPinScreen();
 }
 function showTechPinScreen(){
-  // Staff login: show PIN screen to identify which staff member
   pinContext='tech';
+  pinAttempts=0;
+  if(Date.now()>pinLockedUntil)pinLockedUntil=0;
   document.getElementById('pinTitle').textContent='Staff Sign In';
   document.getElementById('pinSub').textContent='Enter your PIN or scan your ID badge';
   document.getElementById('pinScanNote').style.display='';
@@ -2605,33 +2678,83 @@ function pinInputChange(){
 }
 
 function pinCancel(){
+  pinAttempts=0;pinLockedUntil=0;pinLockoutCount=0;
   document.getElementById('pinModal').style.display='none';
+  document.getElementById('pinErr').textContent='';
   // Tech login - can't bypass PIN, log out instead
   if(window.doLogout)window.doLogout();
 }
 
-function pinSubmit(){
+function fmtLockTime(ms){
+  if(ms<=0)return'0s';
+  const s=Math.ceil(ms/1000);
+  if(s<60)return s+'s';
+  const m=Math.floor(s/60),rs=s%60;
+  return m+'m'+(rs>0?' '+rs+'s':'');
+}
+function pinShowLockout(errEl,until){
+  const remaining=until-Date.now();
+  if(remaining<=0){pinAttempts=0;pinLockedUntil=0;if(errEl)errEl.textContent='';
+    var pf=document.getElementById('pinAttemptFill');if(pf)pf.style.width='0%';
+    return;}
+  if(errEl)errEl.textContent='Too many attempts. Try again in '+fmtLockTime(remaining)+'.';
+  setTimeout(()=>pinShowLockout(errEl,until),1000);
+}
+async function pinSubmit(){
+  const errEl=document.getElementById('pinErr');
+  // Check lockout
+  if(Date.now()<pinLockedUntil){pinShowLockout(errEl,pinLockedUntil);return;}
   const pin=document.getElementById('pinInput').value.trim();
-  if(!pin){document.getElementById('pinErr').textContent='Please enter your PIN.';return;}
+  if(!pin){errEl.textContent='Please enter your PIN.';return;}
+  errEl.textContent='Checking…';
   if(pinContext==='admin'){
-    if(pin===appConfig.adminPin){
+    const ok=await checkPin(pin,appConfig.adminPinHash);
+    if(ok){
+      pinAttempts=0;pinLockedUntil=0;
       document.getElementById('pinModal').style.display='none';
       activateRole('admin',null);
     } else {
-      document.getElementById('pinErr').textContent='Incorrect PIN. Try again.';
+      pinAttempts++;
+      var _pf=document.getElementById('pinAttemptFill');if(_pf)_pf.style.width=(pinAttempts/PIN_MAX_ATTEMPTS*100)+'%';
       document.getElementById('pinInput').value='';
-      document.getElementById('pinInput').focus();
+      if(pinAttempts>=PIN_MAX_ATTEMPTS){
+        pinLockoutCount++;
+        const adminLockMs=PIN_LOCKOUT_BASE_MS*Math.pow(2,pinLockoutCount-1);
+        pinLockedUntil=Date.now()+adminLockMs;
+        pinAttempts=0;
+        var _pf2=document.getElementById('pinAttemptFill');if(_pf2)_pf2.style.width='0%';
+        pinShowLockout(errEl,pinLockedUntil);
+      } else {
+        errEl.textContent='Incorrect PIN. '+(PIN_MAX_ATTEMPTS-pinAttempts)+' attempt'+(PIN_MAX_ATTEMPTS-pinAttempts!==1?'s':'')+' remaining.';
+        document.getElementById('pinInput').focus();
+      }
     }
   } else {
-    // Tech identification by PIN
-    const tech=appConfig.techs.find(t=>t.pin===pin);
-    if(tech){
+    // Tech identification — check against hashed PINs
+    let matchedTech=null;
+    for(const t of appConfig.techs){
+      const ok=await checkPin(pin,t.pinHash||'');
+      if(ok){matchedTech=t;break;}
+    }
+    if(matchedTech){
+      pinAttempts=0;pinLockedUntil=0;
       document.getElementById('pinModal').style.display='none';
-      activateRole('tech',tech);
+      activateRole('tech',matchedTech);
     } else {
-      document.getElementById('pinErr').textContent='PIN not recognised. Try again.';
+      pinAttempts++;
+      var _pft=document.getElementById('pinAttemptFill');if(_pft)_pft.style.width=(pinAttempts/PIN_MAX_ATTEMPTS*100)+'%';
       document.getElementById('pinInput').value='';
-      document.getElementById('pinInput').focus();
+      if(pinAttempts>=PIN_MAX_ATTEMPTS){
+        pinLockoutCount++;
+        const techLockMs=PIN_LOCKOUT_BASE_MS*Math.pow(2,pinLockoutCount-1);
+        pinLockedUntil=Date.now()+techLockMs;
+        pinAttempts=0;
+        var _pft2=document.getElementById('pinAttemptFill');if(_pft2)_pft2.style.width='0%';
+        pinShowLockout(errEl,pinLockedUntil);
+      } else {
+        errEl.textContent='PIN not recognised. '+(PIN_MAX_ATTEMPTS-pinAttempts)+' attempt'+(PIN_MAX_ATTEMPTS-pinAttempts!==1?'s':'')+' remaining.';
+        document.getElementById('pinInput').focus();
+      }
     }
   }
 }
@@ -2700,16 +2823,49 @@ window.loadConfig = function(){
   if(typeof db==='undefined')return;
 };
 
-window.applyConfig = function(cfg){
+window.applyConfig = async function(cfg){
   if(!cfg)return;
-  if(cfg.adminPin)appConfig.adminPin=cfg.adminPin;
-  if(cfg.techs)appConfig.techs=cfg.techs;
+  let needsSave=false;
+  // Handle admin PIN — migrate plain to hash if needed
+  if(cfg.adminPinHash){
+    appConfig.adminPinHash=cfg.adminPinHash;
+  } else if(cfg.adminPin){
+    // Legacy plain PIN — hash it and save
+    appConfig.adminPinHash=await hashPin(cfg.adminPin);
+    needsSave=true;
+  } else {
+    // First run — hash the default PIN
+    appConfig.adminPinHash=await hashPin('1234');
+    needsSave=true;
+  }
+  // Handle techs — migrate plain pins to hashes
+  if(cfg.techs&&cfg.techs.length){
+    const migrated=[];
+    for(const t of cfg.techs){
+      if(t.pinHash){
+        migrated.push(t);
+      } else if(t.pin){
+        // Legacy plain PIN — hash it
+        const pinHash=await hashPin(t.pin);
+        migrated.push({name:t.name,pinHash,badgeId:t.badgeId||''});
+        needsSave=true;
+      }
+    }
+    appConfig.techs=migrated;
+  }
+  if(needsSave&&window.fbSaveConfig){
+    // Save migrated hashes to Firestore (removes plain text PINs)
+    window.fbSaveConfig({adminPinHash:appConfig.adminPinHash,techs:appConfig.techs});
+  }
 };
 
 // ═══ VERIFY MODAL (tech removal authentication) ═══
 function openVerifyModal(removalData){
   verifyContext=removalData;
   verifyMode='pin';
+  verifyAttempts=0;
+  // Only reset lockout if it has expired
+  if(Date.now()>verifyLockedUntil)verifyLockedUntil=0;
   document.getElementById('verifyPinInput').value='';
   document.getElementById('verifyErr').textContent='';
   document.getElementById('verifyScanErr').textContent='';
@@ -2745,16 +2901,41 @@ function verifyBadgeScan(badgeId){
   }
 }
 
-function verifySubmit(){
+function verifyShowLockout(errEl,until){
+  const remaining=until-Date.now();
+  if(remaining<=0){verifyAttempts=0;verifyLockedUntil=0;if(errEl)errEl.textContent='';
+    var vf=document.getElementById('verifyAttemptFill');if(vf)vf.style.width='0%';
+    return;}
+  if(errEl)errEl.textContent='Too many attempts. Try again in '+fmtLockTime(remaining)+'.';
+  setTimeout(()=>verifyShowLockout(errEl,until),1000);
+}
+async function verifySubmit(){
   if(verifyMode==='scan')return;
+  const errEl=document.getElementById('verifyErr');
+  if(Date.now()<verifyLockedUntil){verifyShowLockout(errEl,verifyLockedUntil);return;}
   const pin=document.getElementById('verifyPinInput').value.trim();
-  if(!pin){document.getElementById('verifyErr').textContent='Enter your PIN.';return;}
-  if(currentTech&&pin===currentTech.pin){
+  if(!pin){errEl.textContent='Enter your PIN.';return;}
+  errEl.textContent='Checking…';
+  if(!currentTech){errEl.textContent='No staff member identified.';return;}
+  const ok=await checkPin(pin,currentTech.pinHash||'');
+  if(ok){
+    verifyAttempts=0;verifyLockedUntil=0;
     verifySuccess();
   } else {
-    document.getElementById('verifyErr').textContent='Incorrect PIN.';
+    verifyAttempts++;
+    var _vf=document.getElementById('verifyAttemptFill');if(_vf)_vf.style.width=(verifyAttempts/PIN_MAX_ATTEMPTS*100)+'%';
     document.getElementById('verifyPinInput').value='';
-    document.getElementById('verifyPinInput').focus();
+    if(verifyAttempts>=PIN_MAX_ATTEMPTS){
+      verifyLockoutCount++;
+      const verifyLockMs=PIN_LOCKOUT_BASE_MS*Math.pow(2,verifyLockoutCount-1);
+      verifyLockedUntil=Date.now()+verifyLockMs;
+      verifyAttempts=0;
+      var _vf2=document.getElementById('verifyAttemptFill');if(_vf2)_vf2.style.width='0%';
+      verifyShowLockout(errEl,verifyLockedUntil);
+    } else {
+      errEl.textContent='Incorrect PIN. '+(PIN_MAX_ATTEMPTS-verifyAttempts)+' attempt'+(PIN_MAX_ATTEMPTS-verifyAttempts!==1?'s':'')+' remaining.';
+      document.getElementById('verifyPinInput').focus();
+    }
   }
 }
 
@@ -2767,7 +2948,10 @@ function verifySuccess(){
 }
 
 function verifyCancel(){
+  verifyAttempts=0;verifyLockedUntil=0;verifyLockoutCount=0;
   document.getElementById('verifyModal').style.display='none';
+  document.getElementById('verifyErr').textContent='';
+  document.getElementById('verifyPinInput').value='';
   verifyContext=null;
 }
 
@@ -2851,24 +3035,33 @@ function hideAddTech(){
   if(form){form.style.display='none';form.dataset.editIdx='';}
 }
 
-function saveTech(){
+async function saveTech(){
   const name=document.getElementById('s-tech-name').value.trim();
   const pin=document.getElementById('s-tech-pin').value.trim();
   const badge=document.getElementById('s-tech-badge').value.trim();
   const form=document.getElementById('s-add-tech-form');
   const editIdx=form.dataset.editIdx!==undefined&&form.dataset.editIdx!==''?parseInt(form.dataset.editIdx):-1;
-  if(!name){document.getElementById('s-add-tech-err').textContent='Name is required.';return;}
-  if(!pin){document.getElementById('s-add-tech-err').textContent='PIN is required.';return;}
-  // Check PIN uniqueness (skip current entry if editing)
-  const pinConflict=appConfig.techs.find((t,i)=>t.pin===pin&&i!==editIdx);
-  if(pinConflict){document.getElementById('s-add-tech-err').textContent='That PIN is already in use.';return;}
+  const errEl=document.getElementById('s-add-tech-err');
+  if(!name){errEl.textContent='Name is required.';return;}
+  if(!pin){errEl.textContent='PIN is required.';return;}
+  if(pin.length<4){errEl.textContent='PIN must be at least 4 characters.';return;}
+  errEl.textContent='Saving…';
+  // Hash the PIN
+  const pinHash=await hashPin(pin);
+  // Check PIN uniqueness by hash (skip current entry if editing)
+  const pinConflict=appConfig.techs.find((t,i)=>t.pinHash===pinHash&&i!==editIdx);
+  if(pinConflict){errEl.textContent='That PIN is already in use.';return;}
+  const techEntry={name,pinHash,badgeId:badge};
   if(editIdx>=0){
-    appConfig.techs[editIdx]={name,pin,badgeId:badge};
+    appConfig.techs[editIdx]=techEntry;
+    // Update currentTech if we just edited the logged-in tech
+    if(currentTech&&currentTech.name===appConfig.techs[editIdx].name)currentTech=techEntry;
     showToast('Staff member updated: '+name,'success');
   } else {
-    appConfig.techs.push({name,pin,badgeId:badge});
+    appConfig.techs.push(techEntry);
     showToast('Staff member added: '+name,'success');
   }
+  errEl.textContent='';
   saveConfig();renderTechList();hideAddTech();
 }
 
@@ -2887,15 +3080,22 @@ function editTech(idx){
   document.getElementById('s-tech-badge').value=t.badgeId||'';
   document.getElementById('s-add-tech-form').dataset.editIdx=idx;
 }
-function saveAdminPin(){
+async function saveAdminPin(){
   const cur=document.getElementById('s-admin-pin-current').value.trim();
   const nw=document.getElementById('s-admin-pin-new').value.trim();
   const cf=document.getElementById('s-admin-pin-confirm').value.trim();
   const err=document.getElementById('s-admin-pin-err');
-  if(cur!==appConfig.adminPin){err.textContent='Current PIN is incorrect.';return;}
+  if(!cur){err.textContent='Enter your current PIN.';return;}
   if(!nw){err.textContent='New PIN cannot be empty.';return;}
-  if(nw!==cf){err.textContent='PINs do not match.';return;}
-  appConfig.adminPin=nw;
+  if(nw.length<4){err.textContent='PIN must be at least 4 characters.';return;}
+  if(nw!==cf){err.textContent='New PINs do not match.';return;}
+  err.textContent='Verifying…';
+  // Verify current PIN against stored hash
+  const curOk=await checkPin(cur,appConfig.adminPinHash);
+  if(!curOk){err.textContent='Current PIN is incorrect.';return;}
+  err.textContent='Saving…';
+  // Hash and store new PIN
+  appConfig.adminPinHash=await hashPin(nw);
   saveConfig();
   err.style.color='var(--okm)';err.textContent='Admin PIN updated.';
   document.getElementById('s-admin-pin-current').value='';
@@ -2912,53 +3112,69 @@ function saveConfig(){
 // ═══ TX CAMERA (inside modal) ═══
 let txCamDetector=null, txCamFrame=null;
 async function toggleTxCamera(){
-  const btn=document.getElementById('txCamBtn');
-  const wrap=document.getElementById('txCamWrap');
-  if(!wrap)return;
-  if(txCamStream){stopTxCam();if(btn)btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Camera';return;}
+  if(txCamStream){stopTxCam();return;}
+  const overlay=document.getElementById('txCamOverlay');
+  const vid=document.getElementById('txCamVideo');
+  const result=document.getElementById('txCamResult');
+  if(!overlay||!vid)return;
   try{
-    txCamStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
-    const vid=document.getElementById('txCamVideo');
+    txCamStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}
+    });
     vid.srcObject=txCamStream;
-    wrap.style.display='';
-    if(btn)btn.innerHTML='⏹ Stop Camera';
+    if(result)result.textContent='';
+    overlay.style.display='flex';
     startTxDetect(vid);
-  }catch(e){showToast('Camera not available','error');}
+  }catch(e){
+    showToast('Camera not available — check browser permissions','error');
+  }
 }
 
 function stopTxCam(){
   if(txCamStream){txCamStream.getTracks().forEach(t=>t.stop());txCamStream=null;}
-  cancelAnimationFrame(txCamFrame);
-  const wrap=document.getElementById('txCamWrap');if(wrap)wrap.style.display='none';
+  cancelAnimationFrame(txCamFrame);txCamFrame=null;
+  const overlay=document.getElementById('txCamOverlay');
+  if(overlay)overlay.style.display='none';
 }
 
 function startTxDetect(vid){
-  if('BarcodeDetector' in window){
-    const det=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e']});
-    let lastCode='',lastTime=0;
-    function detect(){
-      txCamFrame=requestAnimationFrame(detect);
-      if(vid.readyState<2)return;
-      det.detect(vid).then(codes=>{
-        if(!codes.length)return;
-        const code=codes[0].rawValue;
-        const now=Date.now();
-        if(code===lastCode&&now-lastTime<SCAN_COOLDOWN)return;
-        lastCode=code;lastTime=now;
-        const fl=document.getElementById('txCamFlash');
-        if(fl){fl.classList.add('flash');setTimeout(()=>fl.classList.remove('flash'),300);}
-        stopTxCam();
-        // Fill the active search input
-        const addSearch=document.getElementById('tx-add-search');
-        const remSearch=document.getElementById('tx-rem-search');
-        const activeSearch=document.getElementById('tx-rem-flow')&&document.getElementById('tx-rem-flow').style.display!=='none'?remSearch:addSearch;
-        if(activeSearch){activeSearch.value=code;activeSearch.dispatchEvent(new Event('input'));}
-      }).catch(()=>{});
-    }
-    detect();
-  } else {
-    showToast('Camera scanning not supported in this browser','warning');
+  if(!('BarcodeDetector' in window)){
+    showToast('Camera scanning not supported — try Chrome or Edge','warning');
+    stopTxCam();return;
   }
+  const det=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf']});
+  const flash=document.getElementById('txCamFlash');
+  const result=document.getElementById('txCamResult');
+  let lastCode='',lastTime=0;
+  function detect(){
+    txCamFrame=requestAnimationFrame(detect);
+    if(vid.readyState<2)return;
+    det.detect(vid).then(function(codes){
+      if(!codes.length)return;
+      const code=codes[0].rawValue;
+      const now=Date.now();
+      if(code===lastCode&&now-lastTime<SCAN_COOLDOWN)return;
+      lastCode=code;lastTime=now;
+      // Flash feedback
+      if(flash){flash.classList.add('flash');setTimeout(()=>flash.classList.remove('flash'),250);}
+      if(result)result.textContent='✓ Scanned: '+code;
+      // Brief pause so user sees the result, then close and fill search
+      setTimeout(function(){
+        stopTxCam();
+        // Fill the active search input based on which flow is open
+        const remFlow=document.getElementById('tx-rem-flow');
+        const isRemove=remFlow&&remFlow.style.display!=='none';
+        const searchId=isRemove?'tx-rem-search':'tx-add-search';
+        const searchEl=document.getElementById(searchId);
+        if(searchEl){
+          searchEl.value=code;
+          searchEl.dispatchEvent(new Event('input'));
+          searchEl.focus();
+        }
+      },600);
+    }).catch(function(){});
+  }
+  detect();
 }
 
 
@@ -3037,6 +3253,9 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
         placeholder="••••" oninput="pinInputChange()" onkeydown="if(event.key==='Enter')pinSubmit()">
     </div>
     <div class="pin-err" id="pinErr"></div>
+    <div id="pinAttemptBar" style="height:3px;background:var(--border);border-radius:3px;margin-bottom:8px;overflow:hidden">
+      <div id="pinAttemptFill" style="height:100%;width:0%;background:#b91c1c;transition:width .3s;border-radius:3px"></div>
+    </div>
     <div class="pin-actions">
       <button class="btn btn-s" style="flex:1" onclick="pinCancel()">← Back</button>
       <button class="btn btn-p" style="flex:1" onclick="pinSubmit()">Continue →</button>
@@ -3061,6 +3280,9 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
       <input type="password" class="pin-input" id="verifyPinInput" maxlength="12" inputmode="numeric"
         placeholder="••••" onkeydown="if(event.key==='Enter')verifySubmit()">
       <div class="pin-err" id="verifyErr"></div>
+      <div id="verifyAttemptBar" style="height:3px;background:var(--border);border-radius:3px;margin-bottom:4px;overflow:hidden">
+        <div id="verifyAttemptFill" style="height:100%;width:0%;background:#b91c1c;transition:width .3s;border-radius:3px"></div>
+      </div>
     </div>
     <div id="verifyScanSection" style="display:none">
       <div class="scan-prompt">
@@ -3130,6 +3352,20 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
   </div>
 </div>
 
+
+<!-- FLOATING CAMERA OVERLAY -->
+<div id="txCamOverlay">
+  <div class="tx-cam-viewport">
+    <video id="txCamVideo" autoplay playsinline muted></video>
+    <div class="tx-cam-reticle">
+      <div class="tx-cam-box"></div>
+    </div>
+    <div class="tx-cam-flash-overlay" id="txCamFlash"></div>
+  </div>
+  <div class="tx-cam-label">Aim barcode at the green box</div>
+  <div class="tx-cam-result" id="txCamResult"></div>
+  <button class="tx-cam-close" onclick="stopTxCam()" title="Close camera">×</button>
+</div>
 </div><!-- /mainApp -->
 </body>
 </html>
