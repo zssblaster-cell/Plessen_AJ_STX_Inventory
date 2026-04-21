@@ -1824,6 +1824,11 @@ function showPage(name){
   });
   if(name==='analytics')doRefreshAnalytics();
   if(name==='changelog')renderChangelog();
+  // Sync mobile bottom nav
+  ['inventory','analytics','changelog'].forEach(p=>{
+    const btn=document.getElementById('mn-'+p);
+    if(btn)btn.classList.toggle('active',p===name);
+  });
 }
 function showSub(name){
   document.querySelectorAll('.sub-page').forEach(p=>p.classList.remove('active'));
@@ -1895,6 +1900,13 @@ function updateBadges(){
   const vs=document.getElementById('fVendor'),cv=vs.value;
   vs.innerHTML='<option value="">All Vendors</option>'+vendors.map(v=>`<option${v===cv?' selected':''}>${v}</option>`).join('');
   const ov=document.getElementById('ov-vendor');if(ov)ov.innerHTML='<option value="">All Vendors</option>'+vendors.map(v=>`<option>${v}</option>`).join('');
+  // Sync badges to mobile nav
+  const _rb=document.getElementById('restockBadge');
+  const _mnrb=document.getElementById('mn-restock-badge');
+  if(_rb&&_mnrb){_mnrb.style.display=_rb.style.display;_mnrb.textContent=_rb.textContent;}
+  const _cb=document.getElementById('clBadge');
+  const _mncb=document.getElementById('mn-cl-badge');
+  if(_cb&&_mncb){_mncb.style.display=_cb.style.display;_mncb.textContent=_cb.textContent;}
 }
 
 
@@ -3019,6 +3031,10 @@ function activateRole(role,tech){
   }
   // Update performed-by displays
   updateByDisplays();
+  // Show/hide admin-only mobile nav tabs
+  document.querySelectorAll('.mobile-nav .admin-only').forEach(el=>{
+    el.style.display=role==='admin'?'':'none';
+  });
   showPage('inventory');
   // Always render inventory immediately on role activation
   updateBadges();
@@ -3434,44 +3450,9 @@ function syncMobileFilter(desktopId,mobileId){
 }
 
 // Update mobile nav badges when updateBadges runs
-const _origUpdateBadges=updateBadges;
-function updateBadges(){
-  _origUpdateBadges();
-  // Sync badges to mobile nav
-  const rb=document.getElementById('restockBadge');
-  const mnrb=document.getElementById('mn-restock-badge');
-  if(rb&&mnrb){
-    mnrb.style.display=rb.style.display;
-    mnrb.textContent=rb.textContent;
-  }
-  const cb=document.getElementById('clBadge');
-  const mncb=document.getElementById('mn-cl-badge');
-  if(cb&&mncb){
-    mncb.style.display=cb.style.display;
-    mncb.textContent=cb.textContent;
-  }
-}
 
-// Keep mobile nav in sync when showPage is called
-const _origShowPage=showPage;
-function showPage(name){
-  _origShowPage(name);
-  // Update mobile bottom nav
-  ['inventory','analytics','changelog'].forEach(p=>{
-    const btn=document.getElementById('mn-'+p);
-    if(btn)btn.classList.toggle('active',p===name);
-  });
-}
 
-// Show/hide admin-only mobile nav items based on role
-const _origActivateRole=activateRole;
-function activateRole(role,tech){
-  _origActivateRole(role,tech);
-  // Update mobile nav admin visibility
-  document.querySelectorAll('.mobile-nav .admin-only').forEach(el=>{
-    el.style.display=role==='admin'?'':'none';
-  });
-}
+
 
 // ═══ BOOT ═══
 // Expose functions so Firebase module can call them after data loads
