@@ -3014,7 +3014,7 @@ function renderTechList(){
   el.innerHTML=appConfig.techs.map((t,i)=>`
     <div class="tech-row">
       <div class="tech-name-cell">${t.name}</div>
-      <div class="tech-pin-cell">PIN: ${'•'.repeat(t.pin.length)}</div>
+      <div class="tech-pin-cell">PIN: ••••••</div>
       <div style="font-size:11px;color:var(--text3);flex:1">${t.badgeId?'Badge: '+t.badgeId.substring(0,8)+'…':''}</div>
       <button class="btn btn-s btn-sm" onclick="editTech(${i})">Edit</button>
       <button class="btn btn-d btn-sm" onclick="deleteTech(${i})">Delete</button>
@@ -3043,11 +3043,13 @@ async function saveTech(){
   const editIdx=form.dataset.editIdx!==undefined&&form.dataset.editIdx!==''?parseInt(form.dataset.editIdx):-1;
   const errEl=document.getElementById('s-add-tech-err');
   if(!name){errEl.textContent='Name is required.';return;}
-  if(!pin){errEl.textContent='PIN is required.';return;}
-  if(pin.length<4){errEl.textContent='PIN must be at least 4 characters.';return;}
+  // PIN is required for new techs, optional when editing (blank = keep existing)
+  if(!pin&&editIdx<0){errEl.textContent='PIN is required for new staff members.';return;}
+  if(pin&&pin.length<4){errEl.textContent='PIN must be at least 4 characters.';return;}
   errEl.textContent='Saving…';
-  // Hash the PIN
-  const pinHash=await hashPin(pin);
+  // Hash the PIN (or keep existing hash if blank during edit)
+  let pinHash=pin?await hashPin(pin):(editIdx>=0&&appConfig.techs[editIdx]?appConfig.techs[editIdx].pinHash:'');
+  if(!pinHash){errEl.textContent='PIN is required.';return;}
   // Check PIN uniqueness by hash (skip current entry if editing)
   const pinConflict=appConfig.techs.find((t,i)=>t.pinHash===pinHash&&i!==editIdx);
   if(pinConflict){errEl.textContent='That PIN is already in use.';return;}
@@ -3338,7 +3340,7 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
           <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px">New Staff Member</div>
           <div class="fg">
             <div class="field full"><label>Full Name *</label><input type="text" id="s-tech-name" placeholder="e.g. Jane Smith"/></div>
-            <div class="field"><label>PIN *</label><input type="password" id="s-tech-pin" placeholder="4–8 digits"/></div>
+            <div class="field"><label>PIN * <span id="s-tech-pin-hint" style="font-size:10px;font-weight:400;color:var(--text3)">(leave blank to keep current)</span></label><input type="password" id="s-tech-pin" placeholder="New PIN or leave blank"/></div>
             <div class="field"><label>Badge ID</label><input type="text" id="s-tech-badge" placeholder="Badge barcode/number"/></div>
           </div>
           <div id="s-add-tech-err" style="color:var(--danger);font-size:12px;min-height:16px"></div>
