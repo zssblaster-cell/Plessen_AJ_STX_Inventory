@@ -769,6 +769,47 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
   /* Stats card value smaller on very small screens */
   .sv{font-size:18px}
 }
+
+/* ── ITEM IMAGE ── */
+.img-field-wrap{margin-bottom:8px}
+.img-preview-box{
+  width:100%;height:160px;border:2px dashed var(--border);border-radius:var(--rl);
+  display:flex;align-items:center;justify-content:center;background:var(--surface2);
+  position:relative;overflow:hidden;cursor:pointer;transition:border-color .15s
+}
+.img-preview-box:hover{border-color:var(--blue)}
+.img-preview-box img{width:100%;height:100%;object-fit:contain;display:block}
+.img-placeholder{text-align:center;color:var(--text3);pointer-events:none}
+.img-placeholder svg{margin:0 auto 6px;display:block}
+.img-placeholder span{font-size:12px;font-weight:500}
+.img-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.img-action-btn{display:flex;align-items:center;gap:5px;padding:6px 10px;
+  border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface);color:var(--text2);
+  transition:all .15s}
+.img-action-btn:hover{background:var(--surface2);border-color:var(--border2)}
+.img-action-btn.danger:hover{background:var(--dlight);border-color:var(--danger);color:var(--danger)}
+/* Image capture overlay */
+#imgCaptureOverlay{
+  position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.9);
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px
+}
+.img-capture-viewport{
+  position:relative;width:min(90vw,480px);border-radius:14px;overflow:hidden;
+  background:#000;box-shadow:0 0 0 2px rgba(255,255,255,.15)
+}
+.img-capture-viewport video{width:100%;display:block;max-height:55vh;object-fit:cover}
+.img-capture-guide{
+  position:absolute;inset:20px;border:2px solid rgba(255,255,255,.4);
+  border-radius:8px;pointer-events:none
+}
+.img-capture-btns{display:flex;gap:10px;align-items:center}
+.img-shutter{
+  width:60px;height:60px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,.4);
+  cursor:pointer;transition:transform .1s;flex-shrink:0
+}
+.img-shutter:active{transform:scale(.93)}
+.img-capture-label{font-size:12px;color:rgba(255,255,255,.6);text-align:center}
 </style>
 </head>
 <body>
@@ -1261,6 +1302,42 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
         <div class="field"><label>Vendor</label><input type="text" id="f-vendor" placeholder="e.g. Henry Schein"/></div>
         <div class="field"><label>Expiry Date</label><input type="date" id="f-expiry"/></div>
         <div class="field full"><label>Notes</label><textarea id="f-notes" placeholder="Additional notes…"></textarea></div>
+        <!-- Image field -->
+        <div class="field full img-field-wrap">
+          <label>Item Image <span style="font-size:11px;font-weight:400;color:var(--text3)">(optional — auto-compressed)</span></label>
+          <div class="img-preview-box" id="imgPreviewBox" onclick="document.getElementById('imgFileInput').click()">
+            <img id="imgPreview" src="" alt="" style="display:none">
+            <div class="img-placeholder" id="imgPlaceholder">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="3"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <span>Click to upload image</span>
+            </div>
+          </div>
+          <div class="img-actions">
+            <button type="button" class="img-action-btn" onclick="document.getElementById('imgFileInput').click()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>Upload Photo
+            </button>
+            <button type="button" class="img-action-btn" onclick="openImgCapture()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>Take Photo
+            </button>
+            <button type="button" class="img-action-btn danger" id="imgRemoveBtn" onclick="clearItemImage()" style="display:none">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              </svg>Remove
+            </button>
+          </div>
+          <input type="file" id="imgFileInput" accept="image/*" style="display:none" onchange="handleImgUpload(this)">
+        </div>
       </div>
     </div>
     <div class="mf"><button class="btn btn-s" onclick="closeItemModal()">Cancel</button><button class="btn btn-p" onclick="saveItem()">Save Item</button></div>
@@ -2009,7 +2086,8 @@ function renderTable(){
     tr.innerHTML=`<td><input type="checkbox" class="cb" ${sel?'checked':''} onchange="toggleSel(${r.id},this.checked)"></td>
       <td><span class="badge ${reorder?'bre':'bok'}">${reorder?'⚠ Reorder':'✓ OK'}</span></td>
       <td class="hm">${sku}</td>
-      <td><span class="iname">${nm}</span>${toggleBtn?'<br>'+toggleBtn:''}</td>
+      <td style="display:flex;align-items:flex-start;gap:6px">${r.image?`<img src="${r.image}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;border:1px solid var(--border)">`:''}
+        <div><span class="iname">${nm}</span>${toggleBtn?'<br>'+toggleBtn:''}</div></td>
       <td>${qtyCell}</td><td class="hm">${pi}</td><td class="hm">${cat}</td>
       <td class="hm" style="color:var(--text2)">${r.vendor||'—'}</td>
       <td><div class="abts">
@@ -2247,6 +2325,8 @@ function openItemModal(id=null){
   renderTagList('f-skus-display', fSkus, 'sku');
   renderTagList('f-lots-display', fLots, 'lot');
   document.getElementById('itemModal').classList.add('open');
+  // Load image preview
+  loadItemImageIntoModal(id?inventory.find(x=>x.id===id):null);
   setTimeout(()=>document.getElementById('f-item').focus(),80);
 }
 function closeItemModal(){document.getElementById('itemModal').classList.remove('open');editId=null;}
@@ -2271,6 +2351,7 @@ function addItemTag(type){
 }
 
 function saveItem(){
+  _pendingImageForSave=_imgPendingData;
   const item=document.getElementById('f-item').value.trim();
   if(!item){showToast('Item name required','error');return;}
   const cat=document.getElementById('f-cat').value;
@@ -2282,11 +2363,14 @@ function saveItem(){
     reorder:document.getElementById('f-status').value,
     category:cat,vendor:document.getElementById('f-vendor').value.trim(),
     expiry:document.getElementById('f-expiry').value||'',
-    notes:document.getElementById('f-notes').value.trim()
+    notes:document.getElementById('f-notes').value.trim(),
+    image:_pendingImageForSave!==null?_pendingImageForSave:undefined,
   };
+  _pendingImageForSave=null;
   if(editId){
     const idx=inventory.findIndex(x=>x.id===editId);
     if(idx>-1){
+      if(data.image===undefined)data.image=inventory[idx].image||null;
       const old=inventory[idx];const ch=[];
       if(old.item!==data.item)ch.push('Name:'+old.item+'→'+data.item);
       if(old.category!==data.category)ch.push('Cat→'+data.category);
@@ -2888,15 +2972,48 @@ function showToast(msg,type=''){const el=document.getElementById('toast');el.tex
 
 // ═══ KEYBOARD ═══
 document.addEventListener('keydown',e=>{
+  // ── ESC: close any open modal/overlay ──
   if(e.key==='Escape'){
     closeItemModal();closeLotModal();closeDelModal();closeDevModal();
     document.getElementById('bDelModal').classList.remove('open');
-    stopCam();stopTxCam();
-    closeSettings();
+    stopCam();stopTxCam();closeSettings();
+    closeImgCapture();
+    return;
   }
-  if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();document.getElementById('searchInput').focus();document.getElementById('searchInput').select();}
-  if((e.metaKey||e.ctrlKey)&&e.key==='t'){e.preventDefault();openTxModal();}
-});
+  // ── Only intercept Ctrl/Cmd shortcuts when NOT typing in an input ──
+  const tag=document.activeElement?.tagName;
+  const isTyping=tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||document.activeElement?.isContentEditable;
+  if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey){
+    switch(e.key.toLowerCase()){
+      case 'k':
+        // Focus search — always intercept so browser doesn't grab it
+        e.preventDefault();
+        if(!isTyping){
+          document.getElementById('searchInput')?.focus();
+          document.getElementById('searchInput')?.select();
+        }
+        break;
+      case 't':
+        // New transaction
+        e.preventDefault();
+        if(!isTyping)openTxModal();
+        break;
+      case 'n':
+        // New item (admin only)
+        e.preventDefault();
+        if(!isTyping&&currentRole==='admin')openItemModal();
+        break;
+      case 'e':
+        // Export CSV
+        e.preventDefault();
+        if(!isTyping&&currentRole==='admin'){
+          const exp=document.querySelector('[onclick*="exportCSV"]');
+          if(exp)exp.click();
+        }
+        break;
+    }
+  }
+}, true)  // ← true = capture phase, fires BEFORE browser default;
 // Click-outside-to-close disabled — use X button to close
 
 
@@ -3488,6 +3605,143 @@ function syncMobileFilter(desktopId,mobileId){
 
 
 
+
+// ═══ ITEM IMAGE SYSTEM ═══
+// Stores compressed base64 image on the item record as r.image
+// Max stored size: 800×800px, JPEG quality 0.72 → ~50-100KB typical
+
+let _imgCamStream=null, _imgFacing='environment', _imgPendingData=null;
+
+// ── compress image via canvas ──
+function compressImage(file, maxPx=800, quality=0.72){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>maxPx||h>maxPx){
+          if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}
+          else{w=Math.round(w*maxPx/h);h=maxPx;}
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',quality));
+      };
+      img.onerror=reject;
+      img.src=e.target.result;
+    };
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── handle file upload ──
+async function handleImgUpload(input){
+  const file=input.files[0];
+  if(!file)return;
+  if(!file.type.startsWith('image/')){showToast('Please select an image file','error');return;}
+  if(file.size>15*1024*1024){showToast('Image too large (max 15MB)','error');return;}
+  showToast('Compressing image…','');
+  try{
+    const data=await compressImage(file);
+    setItemImage(data);
+  }catch(e){showToast('Could not process image','error');}
+  input.value=''; // reset so same file can be re-selected
+}
+
+// ── set image in the modal preview ──
+function setItemImage(dataUrl){
+  _imgPendingData=dataUrl;
+  const preview=document.getElementById('imgPreview');
+  const placeholder=document.getElementById('imgPlaceholder');
+  const removeBtn=document.getElementById('imgRemoveBtn');
+  const box=document.getElementById('imgPreviewBox');
+  if(preview){preview.src=dataUrl;preview.style.display='';}
+  if(placeholder)placeholder.style.display='none';
+  if(removeBtn)removeBtn.style.display='';
+  if(box)box.style.borderStyle='solid';
+  showToast('Image ready — save item to store it','ok');
+}
+
+function clearItemImage(){
+  _imgPendingData=null;
+  const preview=document.getElementById('imgPreview');
+  const placeholder=document.getElementById('imgPlaceholder');
+  const removeBtn=document.getElementById('imgRemoveBtn');
+  const box=document.getElementById('imgPreviewBox');
+  if(preview){preview.src='';preview.style.display='none';}
+  if(placeholder)placeholder.style.display='';
+  if(removeBtn)removeBtn.style.display='none';
+  if(box)box.style.borderStyle='dashed';
+}
+
+function loadItemImageIntoModal(r){
+  if(r&&r.image){
+    setItemImage(r.image);
+  } else {
+    clearItemImage();
+  }
+}
+
+// ── CAMERA CAPTURE ──
+async function openImgCapture(){
+  const overlay=document.getElementById('imgCaptureOverlay');
+  const video=document.getElementById('imgCaptureVideo');
+  if(!overlay||!video)return;
+  try{
+    _imgCamStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:_imgFacing},width:{ideal:1280},height:{ideal:960}}
+    });
+    video.srcObject=_imgCamStream;
+    overlay.style.display='flex';
+  }catch(e){
+    showToast('Camera not available — check browser permissions','error');
+  }
+}
+
+function closeImgCapture(){
+  if(_imgCamStream){_imgCamStream.getTracks().forEach(t=>t.stop());_imgCamStream=null;}
+  const overlay=document.getElementById('imgCaptureOverlay');
+  const video=document.getElementById('imgCaptureVideo');
+  if(overlay)overlay.style.display='none';
+  if(video)video.srcObject=null;
+}
+
+async function switchImgCamera(){
+  _imgFacing=_imgFacing==='environment'?'user':'environment';
+  closeImgCapture();
+  await new Promise(r=>setTimeout(r,200));
+  openImgCapture();
+}
+
+function captureImg(){
+  const video=document.getElementById('imgCaptureVideo');
+  const canvas=document.getElementById('imgCaptureCanvas');
+  if(!video||!canvas)return;
+  // Flash effect
+  const overlay=document.getElementById('imgCaptureOverlay');
+  if(overlay){
+    overlay.style.background='rgba(255,255,255,.8)';
+    setTimeout(()=>{overlay.style.background='rgba(0,0,0,.9)';},120);
+  }
+  // Draw frame to canvas and compress
+  let w=video.videoWidth,h=video.videoHeight;
+  const maxPx=800;
+  if(w>maxPx||h>maxPx){
+    if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}
+    else{w=Math.round(w*maxPx/h);h=maxPx;}
+  }
+  canvas.width=w;canvas.height=h;
+  canvas.getContext('2d').drawImage(video,0,0,w,h);
+  const dataUrl=canvas.toDataURL('image/jpeg',0.72);
+  closeImgCapture();
+  setItemImage(dataUrl);
+}
+
+let _pendingImageForSave=null;
+
 // ═══ BOOT ═══
 // Expose functions so Firebase module can call them after data loads
 window.RAW = RAW;
@@ -3641,6 +3895,21 @@ window.localFallbackBoot = function(){
   </div>
 </div>
 
+
+<!-- IMAGE CAPTURE OVERLAY -->
+<div id="imgCaptureOverlay">
+  <div class="img-capture-viewport">
+    <video id="imgCaptureVideo" autoplay playsinline muted></video>
+    <div class="img-capture-guide"></div>
+  </div>
+  <div class="img-capture-label">Position item in frame — tap shutter to capture</div>
+  <div class="img-capture-btns">
+    <button onclick="closeImgCapture()" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);color:#fff;font-size:18px;cursor:pointer">×</button>
+    <button class="img-shutter" onclick="captureImg()" title="Take photo"></button>
+    <button onclick="switchImgCamera()" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.3);color:#fff;font-size:16px;cursor:pointer" title="Flip camera">🔄</button>
+  </div>
+  <canvas id="imgCaptureCanvas" style="display:none"></canvas>
+</div>
 
 <!-- FLOATING CAMERA OVERLAY -->
 <div id="txCamOverlay">
