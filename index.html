@@ -32,7 +32,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){});
 
 function setSS(s){
   var el=document.getElementById('syncStatus'),dot=document.getElementById('syncDot');if(!el)return;
-  var m={loading:{t:'Loading...',c:'#60a5fa',a:true},saving:{t:'Saving...',c:'#fbbf24',a:true},synced:{t:'Synced',c:'#34d399',a:false},error:{t:'Offline',c:'#f87171',a:false}};
+  var m={loading:{t:'Loading...',c:'#60a5fa',a:true},saving:{t:'Saving...',c:'#fbbf24',a:true},synced:{t:'Synced',c:'#34d399',a:false},error:{t:'Sync Error',c:'#f87171',a:false},offline:{t:'Offline',c:'#9ca3af',a:false}};
   var st=m[s]||m.synced;el.textContent=st.t;dot.style.background=st.c;dot.style.animation=st.a?'pulse2 1s infinite':'none';
 }
 
@@ -101,7 +101,6 @@ function fbLoad(){
     var mig=window.inventory.map(function(r,i){var b=JSON.stringify(r),a=JSON.stringify(migrateItem(Object.assign({},r),i));if(b!==a)dirty=true;return JSON.parse(a);});
     mutArr(window.inventory,mig);
     if(dirty)window.fbSave();
-    setSS('synced');
     setSS('synced');
     window._fbReady=true;
     // Load config then route by email
@@ -204,6 +203,9 @@ window.doLogout=function(){
   window._fbReady=false;
   auth.signOut();
 };
+// Real online/offline detection using browser API
+window.addEventListener('online',  function(){ if(window._fbReady)setSS('synced'); });
+window.addEventListener('offline', function(){ setSS('offline'); });
 })();
 </script>
 <style>
@@ -1072,7 +1074,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
     <div class="inv-sub-page" id="inv-page-history">
       <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border)">
         <select id="hist-mode" onchange="renderHistPanel()" style="font-size:12px"><option value="">All</option><option value="add">Added</option><option value="remove">Removed</option></select>
-        <select id="hist-days" onchange="renderHistPanel()" style="font-size:12px"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="9999">All time</option></select>
+        <select id="hist-days" onchange="renderHistPanel()" style="font-size:12px"><option value="9999" selected>All time</option><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option></select>
         <button class="btn btn-s btn-sm" onclick="exportTx()" style="margin-left:auto">Export CSV</button>
       </div>
       <div style="overflow-x:auto">
@@ -1855,9 +1857,13 @@ function saveAll(){
   if(window.fbSaveDebounced)window.fbSaveDebounced();
 }
 function loadAll(){
-  try{const i=localStorage.getItem('pI8'),l=localStorage.getItem('pL8'),t=localStorage.getItem('pT8');
-    if(i)inventory=JSON.parse(i);if(l)changeLog=JSON.parse(l);if(t)transactions=JSON.parse(t);return!!i;}
-  catch(e){}return false;
+  try{
+    const i=localStorage.getItem('pI8'),l=localStorage.getItem('pL8'),t=localStorage.getItem('pT8');
+    if(i){const d=JSON.parse(i);window.inventory.length=0;d.forEach(function(x){window.inventory.push(x);});}
+    if(l){const d=JSON.parse(l);window.changeLog.length=0;d.forEach(function(x){window.changeLog.push(x);});}
+    if(t){const d=JSON.parse(t);window.transactions.length=0;d.forEach(function(x){window.transactions.push(x);});}
+    return!!i;
+  }catch(e){}return false;
 }
 function logChange(type,item,detail=''){
   const by=getCurrentUserName?getCurrentUserName():'';
@@ -2020,9 +2026,9 @@ function renderHistPanel(){
   const modeEl=document.getElementById('hist-mode');
   const daysEl=document.getElementById('hist-days');
   const mode=modeEl?modeEl.value||'':'';
-  const days=parseInt(daysEl?daysEl.value||'30':'30')||30;
+  const days=parseInt(daysEl?daysEl.value||'9999':'9999')||9999;
   const cut=Date.now()-days*86400000;
-  const list=transactions.filter(t=>new Date(t.ts).getTime()>cut&&(!mode||t.mode===mode)).slice(0,200);
+  const list=(window.transactions||transactions).filter(t=>new Date(t.ts).getTime()>cut&&(!mode||t.mode===mode)).slice(0,200);
   const body=document.getElementById('histBody');if(!body)return;
   if(!list.length){body.innerHTML='<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--text3);font-size:13px">No transactions in this period</td></tr>';return;}
   body.innerHTML=list.map(t=>{
@@ -2952,7 +2958,7 @@ function renderChangelog(){
   let cutoff=0;
   if(df==='today'){const t=new Date();t.setHours(0,0,0,0);cutoff=t.getTime();}
   else if(df!=='9999')cutoff=Date.now()-parseInt(df)*86400000;
-  let entries=changeLog.filter(l=>!cutoff||new Date(l.ts).getTime()>=cutoff);
+  let entries=(window.changeLog||changeLog).filter(l=>!cutoff||new Date(l.ts).getTime()>=cutoff);
   if(clf!=='all')entries=entries.filter(l=>l.type===clf);
   const body=document.getElementById('clBody');
   if(!entries.length){body.innerHTML='<div class="empty">No changes in selected period.</div>';return;}
