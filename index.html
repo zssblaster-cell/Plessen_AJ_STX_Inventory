@@ -164,9 +164,34 @@ function fbLoad(){
     });
   }).catch(function(e){
     console.error('fbLoad error - details:', e.code, e.message, e);
-    // Only show offline if it's a real network/auth error, not a data error
     setSS('error');
+    // Show a banner prompting the user to fix Firestore rules
+    var banner=document.getElementById('connectionBanner');
+    if(banner){
+      banner.style.display='block';
+      banner.style.background='#fef3c7';
+      banner.style.color='#92400e';
+      banner.style.borderColor='#d97706';
+      banner.innerHTML='⚠ Firestore permission error — check your Firestore rules in the Firebase Console. <a href="https://console.firebase.google.com" target="_blank" style="color:#92400e;font-weight:700">Open Firebase Console →</a>';
+    }
+    // Still route by email so UI activates correctly
+    // even when Firestore rules block access
     if(window.localFallbackBoot)window.localFallbackBoot();
+    var email=window._authEmail||'';
+    // Apply empty config so PIN hashes default to '1234'
+    if(window.applyConfig){
+      window.applyConfig({adminPinHash:'',techs:[]}).then(function(){
+        if(email==='anthony.jolly@plesseneye.com'){
+          if(window.activateRole)window.activateRole('admin',null);
+        } else if(email==='examuser@plesseneye.com'){
+          if(window.showTechPinScreen)window.showTechPinScreen();
+        }
+      });
+    } else {
+      if(email==='anthony.jolly@plesseneye.com'){
+        if(window.activateRole)window.activateRole('admin',null);
+      }
+    }
   });
 }
 
