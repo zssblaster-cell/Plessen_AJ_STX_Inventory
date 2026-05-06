@@ -3386,14 +3386,42 @@ async function verifySubmit(){
   const pin=document.getElementById('verifyPinInput').value.trim();
   if(!pin){errEl.textContent='Enter your PIN.';return;}
   errEl.textContent='Checking…';
-  if(!currentTech){errEl.textContent='No staff member identified.';return;}
-  const ok=await checkPin(pin,currentTech.pinHash||'');
-  if(ok){
+
+  let pinOk=false;
+  let matchedTech=null;
+
+  if(currentRole==='admin'){
+    // Admin verifies against admin PIN only
+    pinOk=await checkPin(pin,appConfig.adminPinHash||'');
+  } else {
+    // Tech: if already identified, check their PIN
+    // If not identified (no login PIN screen), search all techs
+    if(currentTech){
+      pinOk=await checkPin(pin,currentTech.pinHash||'');
+      if(pinOk)matchedTech=currentTech;
+    } else {
+      // Search all techs — the PIN identifies who is performing the action
+      for(const t of appConfig.techs){
+        if(await checkPin(pin,t.pinHash||'')){
+          pinOk=true;matchedTech=t;break;
+        }
+      }
+      // Also allow admin PIN as fallback (admin helping at tech station)
+      if(!pinOk){
+        pinOk=await checkPin(pin,appConfig.adminPinHash||'');
+      }
+    }
+  }
+
+  if(pinOk){
     verifyAttempts=0;verifyLockedUntil=0;
+    // Set currentTech so the transaction is attributed correctly
+    if(matchedTech)currentTech=matchedTech;
     verifySuccess();
   } else {
     verifyAttempts++;
-    var _vf=document.getElementById('verifyAttemptFill');if(_vf)_vf.style.width=(verifyAttempts/PIN_MAX_ATTEMPTS*100)+'%';
+    var _vf=document.getElementById('verifyAttemptFill');
+    if(_vf)_vf.style.width=(verifyAttempts/PIN_MAX_ATTEMPTS*100)+'%';
     document.getElementById('verifyPinInput').value='';
     if(verifyAttempts>=PIN_MAX_ATTEMPTS){
       verifyLockoutCount++;
@@ -3403,7 +3431,8 @@ async function verifySubmit(){
       var _vf2=document.getElementById('verifyAttemptFill');if(_vf2)_vf2.style.width='0%';
       verifyShowLockout(errEl,verifyLockedUntil);
     } else {
-      errEl.textContent='Incorrect PIN. '+(PIN_MAX_ATTEMPTS-verifyAttempts)+' attempt'+(PIN_MAX_ATTEMPTS-verifyAttempts!==1?'s':'')+' remaining.';
+      const left=PIN_MAX_ATTEMPTS-verifyAttempts;
+      errEl.textContent='Incorrect PIN. '+left+' attempt'+(left!==1?'s':'')+' remaining.';
       document.getElementById('verifyPinInput').focus();
     }
   }
