@@ -1623,6 +1623,19 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
             <div class="field"><label>Unit</label><select id="tx-rem-unit"><option>units</option><option>vials</option><option>boxes</option><option>bottles</option><option>doses</option><option>mL</option></select></div>
             <div class="field"><label>Performed By</label><input type="text" id="tx-rem-by" placeholder="Staff initials"/></div>
             <div class="field full"><label>Notes</label><input type="text" id="tx-rem-notes" placeholder="Patient ID, chart #, detail…"/></div>
+          </div>
+          <!-- Submit button — always visible to both admin and tech -->
+          <div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+            <button class="btn btn-s" style="flex:1" onclick="txRemClear()">← Back</button>
+            <button class="btn btn-p" style="flex:2;background:var(--danger);color:#fff;font-size:14px;font-weight:700"
+              onclick="txSaveRemove()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              </svg>
+              Confirm Removal
+            </button>
+          </div>
         </div>
       </div>
     </div>
