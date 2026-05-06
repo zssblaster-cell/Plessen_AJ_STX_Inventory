@@ -1014,6 +1014,9 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
       <div class="inv-snt" id="inv-tab-history" onclick="showInvTab('history')">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Transaction Log
       </div>
+      <div class="inv-snt" id="inv-tab-inactive" onclick="showInvTab('inactive')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Inactive <span id="inactive-count" style="background:var(--surface3);color:var(--text3);border-radius:10px;padding:1px 5px;font-size:10px;margin-left:2px">0</span>
+      </div>
     </div>
 
     <!-- INVENTORY LIST TAB -->
@@ -1098,6 +1101,21 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
             <th>Mode</th><th>Item</th><th>Qty</th><th>Lot</th><th>Expiry</th><th>Reason</th><th>By</th><th>Date</th><th></th>
           </tr></thead>
           <tbody id="histBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- INACTIVE ITEMS TAB -->
+    <div class="inv-sub-page" id="inv-page-inactive">
+      <div style="padding:10px 14px;background:var(--warn-bg);border-radius:var(--r);margin-bottom:12px;font-size:12px;color:var(--warn);font-weight:600">
+        ⏸ Inactive items are hidden from search, analytics, and reorder alerts. Use the restore button to make an item active again.
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr>
+          <th>Item</th><th>Category</th><th>Qty</th><th>Vendor</th><th style="width:80px"></th>
+        </tr></thead>
+        <tbody id="inactiveBody">
+          <tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3)">No inactive items</td></tr>
+        </tbody>
         </table>
       </div>
     </div>
@@ -1320,6 +1338,12 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
         <div class="field"><label>Vendor</label><input type="text" id="f-vendor" placeholder="e.g. Henry Schein"/></div>
 
         <div class="field full"><label>Notes</label><textarea id="f-notes" placeholder="Additional notes…"></textarea></div>
+        <div class="field full" style="display:flex;align-items:center;gap:10px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500">
+            <input type="checkbox" id="f-inactive" style="width:16px;height:16px;cursor:pointer">
+            Mark as inactive <span style="font-size:11px;font-weight:400;color:var(--text3)">(hides from search, analytics, and reorder alerts)</span>
+          </label>
+        </div>
         <!-- Image field -->
         <div class="field full img-field-wrap">
           <label>Item Image <span style="font-size:11px;font-weight:400;color:var(--text3)">(optional — auto-compressed)</span></label>
@@ -1598,14 +1622,13 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
             <div class="field"><label>Quantity <span class="req-star">*</span></label><input type="number" id="tx-rem-qty" min="0" step="1" placeholder="0"/></div>
             <div class="field"><label>Unit</label><select id="tx-rem-unit"><option>units</option><option>vials</option><option>boxes</option><option>bottles</option><option>doses</option><option>mL</option></select></div>
             <div class="field"><label>Performed By</label><input type="text" id="tx-rem-by" placeholder="Staff initials"/></div>
-            <div class="field full"><label>Notes</label><input type="text" id="tx-rem-notes" placeholder="Patient ID, chart #, details…"/></div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:14px">
-            <button class="btn btn-d" onclick="txSaveRemove()" style="flex:1;padding:10px;justify-content:center">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Save — Remove
-            </button>
-          </div>
+            <div class="field full"><label>Notes</label><input type="text" id="tx-rem-notes" placeholder="Patient ID, chart #, detail…"/></div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══ CONSTANTS ═══
 const RAW = [
@@ -1961,7 +1984,7 @@ function doRefreshAnalytics(){
 
 // ═══ BADGES ═══
 function updateBadges(){
-  const items=inventory.filter(r=>r.item&&r.item.trim());
+  const items=inventory.filter(r=>r.item&&r.item.trim()&&!r.inactive);
   // Restock count
   const needsR=items.filter(r=>calcTotal(r)===0||(r.par&&calcTotal(r)<=parseFloat(r.par))||r.reorder==='REORDER');
   const outN=items.filter(r=>calcTotal(r)===0).length;
@@ -2024,20 +2047,27 @@ function syncTotal(r){
     }
   }
   r.quantity=calcTotal(r);
-  r.reorder=r.quantity===0?'REORDER':'OK';
+  // Auto-set reorder status based on PAR level
+  const qty=parseFloat(r.quantity)||0;
+  const par=parseFloat(r.par)||0;
+  if(qty===0)r.reorder='REORDER';
+  else if(par>0&&qty<=par)r.reorder='REORDER';
+  else r.reorder='OK';
 }
 function expInline(exp){if(!exp)return'';const d=daysLeft(exp);if(d<0)return'<span class="eexp">EXPIRED</span>';if(d<=14)return`<span class="eurg">${d}d</span>`;if(d<=60)return`<span class="esoon">${d}d</span>`;return`<span class="eok">${exp}</span>`;}
 function lotCls(exp){if(!exp)return'';const d=daysLeft(exp);if(d<0)return'exp-c';if(d<=14)return'urg-c';if(d<=60)return'warn-c';return'fefo-c';}
 
 // ═══ INVENTORY SUB-TABS ═══
 function showInvTab(tab){
-  ['list','history'].forEach(t=>{
+  ['list','history','inactive'].forEach(t=>{
     const pg=document.getElementById('inv-page-'+t);
     const nt=document.getElementById('inv-tab-'+t);
     if(pg)pg.classList.toggle('active',t===tab);
     if(nt)nt.classList.toggle('active',t===tab);
   });
   if(tab==='history')renderHistPanel();
+  if(tab==='inactive')renderInactiveTab();
+  if(tab==='list')applyFilters(); // re-filter to exclude inactive
 }
 function renderHistPanel(){
   const modeEl=document.getElementById('hist-mode');
@@ -2076,8 +2106,12 @@ function applyFilters(){
   const st=document.getElementById('fStatus').value;
   const vv=document.getElementById('fVendor').value;
   perPage=parseInt(document.getElementById('perPage').value);
+  const onInactiveTab=document.getElementById('inv-tab-inactive')?.classList.contains('active');
   filtered=inventory.filter(r=>{
     if(!r.item||!r.item.trim())return false;
+    // Inactive items only shown in the inactive tab
+    if(onInactiveTab){if(!r.inactive)return false;}
+    else{if(r.inactive)return false;}
     const mq=!q||r.item.toLowerCase().includes(q)||(r.sku||'').toLowerCase().includes(q)||(r.vendor||'').toLowerCase().includes(q)||(r.notes||'').toLowerCase().includes(q);
     return mq&&(!cat||r.category===cat)&&(!st||r.reorder===st)&&(!vv||r.vendor===vv);
   });
@@ -2087,7 +2121,7 @@ function applyFilters(){
     else{va=String(va).toLowerCase();vb=String(vb).toLowerCase();}
     return va<vb?-sortDir:va>vb?sortDir:0;
   });
-  currentPage=1;renderTable();updateBadges();
+  currentPage=1;renderTable();updateBadges();updateInactiveBadge();
 }
 function renderTable(){
   const total=filtered.length,pages=Math.ceil(total/perPage)||1;
@@ -2123,7 +2157,7 @@ function renderTable(){
       <td class="hm" style="color:var(--text2)">${r.vendor||'—'}</td>
       <td><div class="abts">
         <button class="ib e" onclick="openItemModal(${r.id})" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-        <button class="ib d" onclick="openDelModal(${r.id})" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+        <button class="ib d" onclick="openDelModal(${r.id})" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button><button class="ib" onclick="toggleInactive(${r.id})" title="${r.inactive?'Restore to active':'Mark inactive'}" style="${r.inactive?'color:var(--ok-mid)':'color:var(--text3)'}">${r.inactive?'↩':'⏸'}</button>
       </div></td>`;
     body.appendChild(tr);
     // All items have lot tracking - always create sub-row
@@ -2349,10 +2383,11 @@ function openItemModal(id=null){
   document.getElementById('f-status').value=r?r.reorder||'OK':'OK';
   document.getElementById('f-cat').value=r?r.category||'':'';
   document.getElementById('f-vendor').value=r?r.vendor||'':'';
-  document.getElementById('f-expiry').value=r?r.expiry||'':'';
   document.getElementById('f-notes').value=r?r.notes||'':'';
   renderTagList('f-skus-display', fSkus, 'sku');
   renderTagList('f-lots-display', fLots, 'lot');
+  const inactiveChk=document.getElementById('f-inactive');
+  if(inactiveChk)inactiveChk.checked=!!(r&&r.inactive);
   document.getElementById('itemModal').classList.add('open');
   // Load image preview
   loadItemImageIntoModal(id?inventory.find(x=>x.id===id):null);
@@ -2389,11 +2424,19 @@ function saveItem(){
     quantity:parseFloat(document.getElementById('f-qty').value)||0,
     price:parseFloat(document.getElementById('f-price').value)||0,
     par:document.getElementById('f-par').value.trim(),
-    reorder:document.getElementById('f-status').value,
+    reorder:(()=>{
+      const qty=parseFloat(document.getElementById('f-qty').value)||0;
+      const par=parseFloat(document.getElementById('f-par').value)||0;
+      const manual=document.getElementById('f-status').value;
+      // If PAR is set, auto-compute; otherwise use manual selection
+      if(par>0)return(qty===0||qty<=par)?'REORDER':'OK';
+      return manual||'OK';
+    })(),
     category:cat,vendor:document.getElementById('f-vendor').value.trim(),
-    expiry:document.getElementById('f-expiry').value||'',
+    expiry:r?r.expiry||'':'',
     notes:document.getElementById('f-notes').value.trim(),
     image:_pendingImageForSave!==null?_pendingImageForSave:undefined,
+    inactive:document.getElementById('f-inactive')?.checked||false,
   };
   _pendingImageForSave=null;
   if(editId){
@@ -3204,7 +3247,7 @@ function activateRole(role,tech){
     if(txBtn)txBtn.style.display='';
   } else {
     badge.className='role-badge tech';
-    badge.innerHTML='👤 '+tech.name;
+    badge.innerHTML='👤 '+(tech?tech.name:'Staff');
     badge.style.display='flex';
     adminEls.forEach(el=>el.style.display='none');
     document.querySelectorAll('.mobile-nav .admin-only').forEach(el=>el.style.display='none');
@@ -3883,6 +3926,40 @@ function completeUndoTransaction(data) {
   showToast(tx.item + ' returned to stock', 'ok');
 }
 
+
+// ═══ INACTIVE ITEMS ═══
+function toggleInactive(id){
+  const r=inventory.find(x=>x.id===id);
+  if(!r)return;
+  r.inactive=!r.inactive;
+  logChange('edit',r.item,(r.inactive?'Marked inactive':'Restored to active'));
+  saveAll();applyFilters();
+  showToast(r.item+(r.inactive?' marked inactive':' restored to active'),
+            r.inactive?'warn':'ok');
+}
+
+function renderInactiveTab(){
+  const body=document.getElementById('inactiveBody');
+  if(!body)return;
+  const inactive=inventory.filter(r=>r.inactive&&r.item&&r.item.trim());
+  if(!inactive.length){
+    body.innerHTML='<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No inactive items</td></tr>';
+    return;
+  }
+  body.innerHTML=inactive.map(r=>`<tr style="opacity:.7">
+    <td><strong>${r.item}</strong>${r.notes?'<br><small style="color:var(--text3)">'+r.notes+'</small>':''}</td>
+    <td style="font-size:12px">${r.category||'—'}</td>
+    <td style="font-size:13px;font-weight:700">${calcTotal(r)||0}</td>
+    <td style="font-size:12px">${r.vendor||'—'}</td>
+    <td><button class="act-btn" title="Restore to active" onclick="toggleInactive(${r.id});renderInactiveTab();updateInactiveBadge()" style="color:var(--ok-mid);border-color:var(--ok-mid)">↩ Restore</button></td>
+  </tr>`).join('');
+}
+
+function updateInactiveBadge(){
+  const cnt=inventory.filter(r=>r.inactive).length;
+  const el=document.getElementById('inactive-count');
+  if(el)el.textContent=cnt;
+}
 // ═══ BOOT ═══
 // Expose functions so Firebase module can call them after data loads
 window.RAW = RAW;
