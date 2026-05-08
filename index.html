@@ -1331,7 +1331,15 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
           </div>
         </div>
         <div class="field"><label>Quantity</label><input type="text" id="f-qty" placeholder="e.g. 10"/></div>
-        <div class="field"><label>Price ($ per unit)</label><input type="number" id="f-price" step="0.01" min="0" placeholder="0.00"/></div>
+        <div class="field">
+          <label>Price</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="number" id="f-price" step="0.01" min="0" placeholder="0.00" style="flex:1">
+            <span style="color:var(--text3);font-size:12px;white-space:nowrap">to</span>
+            <input type="number" id="f-price-high" step="0.01" min="0" placeholder="leave blank if single price" style="flex:1.5">
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">Enter one price, or low &amp; high for a range. Auto-set from lot prices.</div>
+        </div>
         <div class="field"><label>PAR Level</label><input type="number" id="f-par" placeholder="Min stock"/></div>
         <div class="field"><label>Status</label><select id="f-status"><option value="OK">In Stock</option><option value="REORDER">Reorder</option></select></div>
         <div class="field"><label>Category</label><select id="f-cat"><option value="">— Select —</option><option>Medications</option><option>Supplies</option><option>Equipment</option><option>Instruments</option><option>Other</option></select></div>
@@ -1629,10 +1637,6 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
             <button class="btn btn-s" style="flex:1" onclick="txRemClear()">← Back</button>
             <button class="btn btn-p" style="flex:2;background:var(--danger);color:#fff;font-size:14px;font-weight:700"
               onclick="txSaveRemove()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              </svg>
               Confirm Removal
             </button>
           </div>
@@ -2148,7 +2152,7 @@ function renderTable(){
     const expCls=ee?(()=>{const d=daysLeft(ee);return d<0?' ee':d<=14?' eu':d<=60?' es':''})():'';
     const skuArr=getSkus(r);const sku=skuArr.length?'<span class="sku" title="'+skuArr.join(', ')+'">'+skuArr[0].substring(0,13)+(skuArr[0].length>13?'…':'')+(skuArr.length>1?' +'+( skuArr.length-1):'')+' </span>':'<span style="color:var(--text3)">—</span>';
     const cat=r.category?`<span class="badge cat-${r.category}">${r.category}</span>`:'—';
-    const pi=`<input class="pi" type="number" value="${r.price||''}" step="0.01" placeholder="0.00" onchange="updPrice(${r.id},this.value)" onclick="this.select()">`;
+    const pi=formatPrice(r);
     let nm=r.item;
     if(ee)nm+=`<br>${expInline(ee)}`;
     else if(r.expiry)nm+=`<br>${expInline(r.expiry)}`;
@@ -2391,7 +2395,8 @@ function openItemModal(id=null){
   fLots=r?[...getLotNums(r)]:[];
   document.getElementById('f-item').value=r?r.item||'':'';
   document.getElementById('f-qty').value=r?calcTotal(r):'';
-  document.getElementById('f-price').value=r?r.price||'':'';
+  document.getElementById('f-price').value=r?(r.priceLow||r.price||''):'';
+  const fph=document.getElementById('f-price-high');if(fph)fph.value=r?r.priceHigh||'':'';
   document.getElementById('f-par').value=r?r.par||'':'';
   document.getElementById('f-status').value=r?r.reorder||'OK':'OK';
   document.getElementById('f-cat').value=r?r.category||'':'';
@@ -2437,6 +2442,8 @@ function saveItem(){
     item,skus:[...fSkus],lotNums:[...fLots],
     quantity:parseFloat(document.getElementById('f-qty').value)||0,
     price:parseFloat(document.getElementById('f-price').value)||0,
+    priceLow:parseFloat(document.getElementById('f-price').value)||0,
+    priceHigh:parseFloat(document.getElementById('f-price-high')?.value)||parseFloat(document.getElementById('f-price').value)||0,
     par:document.getElementById('f-par').value.trim(),
     reorder:(()=>{
       const qty=parseFloat(document.getElementById('f-qty').value)||0;
@@ -2481,10 +2488,7 @@ function updQty(id,val){
     if(parseFloat(val)===0)inventory[idx].reorder='REORDER';
     logChange('qty',inventory[idx].item,'Qty:'+old+'→'+val);saveAll();updateBadges();showToast('Qty updated','success');}
 }
-function updPrice(id,val){
-  const idx=inventory.findIndex(x=>x.id===id);
-  if(idx>-1){inventory[idx].price=parseFloat(val)||0;saveAll();updateBadges();}
-}
+
 function openDelModal(id){deleteId=id;const r=inventory.find(x=>x.id===id);document.getElementById('delName').textContent=r?r.item:'item';document.getElementById('delModal').classList.add('open');}
 function closeDelModal(){document.getElementById('delModal').classList.remove('open');deleteId=null;}
 function confirmDel(){if(deleteId){const r=inventory.find(x=>x.id===deleteId);if(r)logChange('del',r.item,'Deleted');inventory=inventory.filter(x=>x.id!==deleteId);saveAll();closeDelModal();applyFilters();showToast('Deleted','error');}}
@@ -3391,48 +3395,47 @@ async function verifySubmit(){
   let matchedTech=null;
 
   if(currentRole==='admin'){
-    // Admin verifies against admin PIN only
     pinOk=await checkPin(pin,appConfig.adminPinHash||'');
   } else {
-    // Tech: if already identified, check their PIN
-    // If not identified (no login PIN screen), search all techs
-    if(currentTech){
-      pinOk=await checkPin(pin,currentTech.pinHash||'');
-      if(pinOk)matchedTech=currentTech;
-    } else {
-      // Search all techs — the PIN identifies who is performing the action
-      for(const t of appConfig.techs){
-        if(await checkPin(pin,t.pinHash||'')){
-          pinOk=true;matchedTech=t;break;
-        }
-      }
-      // Also allow admin PIN as fallback (admin helping at tech station)
-      if(!pinOk){
-        pinOk=await checkPin(pin,appConfig.adminPinHash||'');
+    // Search ALL techs — PIN identifies who is removing the medication.
+    // Each staff member enters their OWN PIN. A wrong PIN means
+    // "this PIN doesn't match any staff member" — not a lockout event,
+    // since another staff member could still enter their correct PIN.
+    for(const t of (appConfig.techs||[])){
+      if(await checkPin(pin,t.pinHash||'')){
+        pinOk=true; matchedTech=t; break;
       }
     }
+    // Admin PIN works as fallback at tech station
+    if(!pinOk) pinOk=await checkPin(pin,appConfig.adminPinHash||'');
   }
 
+  document.getElementById('verifyPinInput').value='';
+
   if(pinOk){
-    verifyAttempts=0;verifyLockedUntil=0;
-    // Set currentTech so the transaction is attributed correctly
-    if(matchedTech)currentTech=matchedTech;
+    // Success — identify the staff member and proceed
+    verifyAttempts=0; verifyLockedUntil=0;
+    var _vf=document.getElementById('verifyAttemptFill');
+    if(_vf)_vf.style.width='0%';
+    if(matchedTech) currentTech=matchedTech;
     verifySuccess();
   } else {
+    // Wrong PIN — increment counter for brute-force protection.
+    // Lockout only triggers after PIN_MAX_ATTEMPTS *consecutive* failures,
+    // preventing someone from hammering random PINs.
     verifyAttempts++;
     var _vf=document.getElementById('verifyAttemptFill');
     if(_vf)_vf.style.width=(verifyAttempts/PIN_MAX_ATTEMPTS*100)+'%';
-    document.getElementById('verifyPinInput').value='';
     if(verifyAttempts>=PIN_MAX_ATTEMPTS){
       verifyLockoutCount++;
-      const verifyLockMs=PIN_LOCKOUT_BASE_MS*Math.pow(2,verifyLockoutCount-1);
-      verifyLockedUntil=Date.now()+verifyLockMs;
+      const ms=PIN_LOCKOUT_BASE_MS*Math.pow(2,verifyLockoutCount-1);
+      verifyLockedUntil=Date.now()+ms;
       verifyAttempts=0;
       var _vf2=document.getElementById('verifyAttemptFill');if(_vf2)_vf2.style.width='0%';
       verifyShowLockout(errEl,verifyLockedUntil);
     } else {
       const left=PIN_MAX_ATTEMPTS-verifyAttempts;
-      errEl.textContent='Incorrect PIN. '+left+' attempt'+(left!==1?'s':'')+' remaining.';
+      errEl.textContent='PIN not recognised. '+left+' attempt'+(left!==1?'s':'')+' remaining before lockout.';
       document.getElementById('verifyPinInput').focus();
     }
   }
@@ -4002,6 +4005,36 @@ function updateInactiveBadge(){
   const cnt=inventory.filter(r=>r.inactive).length;
   const el=document.getElementById('inactive-count');
   if(el)el.textContent=cnt;
+}
+
+// ═══ PRICE RANGE HELPERS ═══
+function getItemPriceRange(r){
+  // Collect prices from lots
+  const lotPrices=(r.lotDetails||[]).map(l=>parseFloat(l.price)||0).filter(p=>p>0);
+  const itemPrice=parseFloat(r.price)||0;
+  const itemPriceLow=parseFloat(r.priceLow)||0;
+  const itemPriceHigh=parseFloat(r.priceHigh)||0;
+
+  // If lots have prices, derive from lots
+  if(lotPrices.length>1){
+    const lo=Math.min(...lotPrices),hi=Math.max(...lotPrices);
+    if(lo!==hi)return{lo,hi,isRange:true};
+    return{lo,hi:lo,isRange:false};
+  }
+  if(lotPrices.length===1)return{lo:lotPrices[0],hi:lotPrices[0],isRange:false};
+
+  // Otherwise use item-level price(s)
+  if(itemPriceLow>0&&itemPriceHigh>0&&itemPriceLow!==itemPriceHigh)
+    return{lo:itemPriceLow,hi:itemPriceHigh,isRange:true};
+  const p=itemPrice||itemPriceLow||itemPriceHigh;
+  return{lo:p,hi:p,isRange:false};
+}
+
+function formatPrice(r){
+  const {lo,hi,isRange}=getItemPriceRange(r);
+  if(!lo&&!hi)return'—';
+  if(isRange)return`{$${lo.toFixed(2)} — $${hi.toFixed(2)}}`;
+  return`$${lo.toFixed(2)}`;
 }
 // ═══ BOOT ═══
 // Expose functions so Firebase module can call them after data loads
