@@ -852,7 +852,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
     </div>
     <div style="margin-bottom:6px">
       <label style="display:block;font-size:12px;font-weight:600;color:#4a5568;margin-bottom:4px">Password</label>
-      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"
         style="width:100%;padding:10px 12px;border:1px solid #dde3ec;border-radius:8px;font-size:14px;outline:none;color:#0f1923;background:#f0f4f8;box-sizing:border-box"
         onkeydown="if(event.key==='Enter')window.doLogin()">
     </div>
@@ -1963,6 +1963,14 @@ function showPage(name){
   });
   if(name==='analytics')doRefreshAnalytics();
   if(name==='changelog')renderChangelog();
+  // Auto-focus scanner when on inventory page
+  if(name==='inventory'){
+    setTimeout(()=>{
+      const sl=document.getElementById('scanLive');
+      if(sl&&!document.querySelector('.modal-wrap.open,.modal-overlay.open,[class*="Modal"][style*="flex"]'))
+        sl.focus();
+    },100);
+  }
   // Sync mobile bottom nav
   ['inventory','analytics','changelog'].forEach(p=>{
     const btn=document.getElementById('mn-'+p);
@@ -2256,16 +2264,28 @@ function confirmBDel(){selectedIds.forEach(id=>{const r=inventory.find(x=>x.id==
 
 // ═══ SCANNER ═══
 function onScanInput(val){
-  clearTimeout(scanTO);if(!val||val.length<3)return;
+  clearTimeout(scanTO);
+  if(!val||val.length<3)return;
   scanTO=setTimeout(()=>{
     const code=val.trim();
     if(!code)return;
     if(_scanLocked){document.getElementById('scanLive').value='';return;}
     const now=Date.now();
-    if(now-lastScanTime<SCAN_COOLDOWN){document.getElementById('scanLive').value='';return;}
+    if(now-lastScanTime<SCAN_COOLDOWN){
+      // Still in cooldown — clear and ignore (each scan is fresh, no accumulation)
+      document.getElementById('scanLive').value='';
+      return;
+    }
     lastScanTime=now;_scanLocked=true;
+    // Clear ALL inputs that could have accumulated content from typing or prior scan
     document.getElementById('scanLive').value='';
-    const si=document.getElementById('searchInput');if(si)si.value='';
+    const si=document.getElementById('searchInput');
+    if(si){si.value='';applyFilters&&applyFilters();}
+    // Clear tx search too if tx modal is open
+    const txRS=document.getElementById('tx-rem-search');
+    if(txRS)txRS.value='';
+    const txAS=document.getElementById('tx-add-search');
+    if(txAS)txAS.value='';
     handleBarcodeScan(code);
     setTimeout(()=>{_scanLocked=false;},SCAN_COOLDOWN);
   },400);
@@ -2275,11 +2295,48 @@ function handleBarcodeScan(code){
   // If verify modal is open, treat as badge scan
   const vm=document.getElementById('verifyModal');
   if(vm&&vm.style.display!=='none'){verifyBadgeScan(code);return;}
-  // Route to transaction modal
-  const matches=findBySku(code);
-  const r=matches.length?matches[0]:null;
-  openTxModal(code);
-  if(r)setTimeout(()=>{txAddSelectItem(r);},200);
+
+  // FIX 5: Always clear search/scanLive before acting on new scan
+  const si=document.getElementById('searchInput');
+  if(si){si.value='';Data&&Data.setSearch&&Data.setSearch('');}
+
+  // Find item by exact SKU match first, then partial
+  const exactMatches=inventory.filter(r=>getSkus(r).some(s=>s.toLowerCase()===code.toLowerCase()));
+  const matches=exactMatches.length?exactMatches:findBySku(code);
+  const r=matches.length===1?matches[0]:null;
+
+  if(r){
+    // Item found — open remove modal with defaults: qty=1, used for patient
+    openTxModal(code);
+    setTimeout(()=>{
+      setTxMode('remove');
+      txRemSelectItem(r);  // select item in remove flow
+      // Pre-set qty to 1 in remove form
+      const qtyEl=document.getElementById('tx-rem-qty');
+      if(qtyEl){qtyEl.value='1';}
+      // Pre-set reason to "used for patient"
+      const reasonEl=document.getElementById('tx-rem-reason');
+      if(reasonEl)reasonEl.value='used_patient';
+      // Auto-select FEFO lot
+      const lotEl=document.getElementById('tx-rem-lot');
+      if(lotEl&&r.lotDetails&&r.lotDetails.length){
+        const fefo=getFefo(r.lotDetails);
+        if(fefo)lotEl.value=fefo.lot;
+      }
+      // Focus qty field so user can optionally change it
+      if(qtyEl)qtyEl.focus();
+    },200);
+  } else {
+    // Item not found or multiple matches — open modal with barcode in search
+    openTxModal(code);
+  }
+  // Re-focus scanLive after processing so next scan is captured immediately
+  setTimeout(()=>{
+    const txOpen=document.getElementById('txModal')?.classList.contains('open');
+    if(!txOpen){
+      document.getElementById('scanLive')?.focus();
+    }
+  },300);
 }
 
 
@@ -2438,6 +2495,15 @@ function saveItem(){
   if(!item){showToast('Item name required','error');return;}
   const cat=document.getElementById('f-cat').value;
   const existingRecord=editId?inventory.find(x=>x.id===editId):null;
+  // Barcode uniqueness check — warn if any SKU in fSkus is already used by another item
+  for(const sku of fSkus){
+    if(!sku)continue;
+    const conflict=inventory.find(r=>r.id!==(editId||0)&&getSkus(r).some(s=>s.toLowerCase()===sku.toLowerCase()));
+    if(conflict){
+      showToast('Barcode "'+sku+'" already used by "'+conflict.item+'"','error');
+      return;
+    }
+  }
   const data={
     item,skus:[...fSkus],lotNums:[...fLots],
     quantity:parseFloat(document.getElementById('f-qty').value)||0,
@@ -2502,7 +2568,7 @@ function openTxModal(prefilledSku){
     setTxMode('remove');
     const rs=document.getElementById('tx-rem-search');
     if(prefilledSku&&rs){rs.value=prefilledSku;txRemSearch(prefilledSku);}
-    else if(rs)setTimeout(()=>rs.focus(),80);
+    else if(rs)setTimeout(()=>{rs.value='';rs.focus();},80);
     // Hide Add mode button for tech
     const addBtn=document.getElementById('txModeAdd');
     if(addBtn)addBtn.style.display='none';
@@ -2577,6 +2643,22 @@ function txShowResults(containerId, results, onSelect){
     el2.addEventListener('click',()=>onSelect(results[i]));
   });
 }
+function txRemSelectItem(item){
+  // Select an item in the remove flow (used after barcode scan)
+  txSelectedItem=item;
+  const rs=document.getElementById('tx-rem-search');
+  if(rs){rs.value=item.item;}
+  // Run search to populate lot dropdown
+  txRemSearch(item.item);
+  // Move to remove form step
+  setTimeout(()=>{
+    txGoStep('tx-rem-form');
+    // Show the remove form fields
+    const form=document.getElementById('tx-rem-flow');
+    if(form)form.style.display='';
+  },100);
+}
+
 function txAddSelectItem(item){
   txSelectedItem=item;
   document.getElementById('tx-add-results').style.display='none';
@@ -3066,44 +3148,67 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     closeItemModal();closeLotModal();closeDelModal();closeDevModal();
     document.getElementById('bDelModal').classList.remove('open');
-    stopCam();stopTxCam();closeSettings();
-    closeImgCapture();
+    stopCam();stopTxCam();closeSettings();closeImgCapture();
     return;
   }
-  // ── Only intercept Ctrl/Cmd shortcuts when NOT typing in an input ──
+
+  // ── ENTER: submit the active modal ──
+  if(e.key==='Enter'){
+    // Only when focus is on an input/select inside a modal (not textarea)
+    const ae=document.activeElement;
+    if(ae&&(ae.tagName==='INPUT'||ae.tagName==='SELECT')&&!ae.closest('textarea')){
+      const modal=ae.closest('.modal-wrap,.modal-overlay,[id$="Modal"],[id$="modal"]');
+      if(modal){
+        // Find the primary button in this modal
+        const primary=modal.querySelector('.btn-p,.btn-primary,[data-primary]');
+        if(primary&&!primary.disabled){
+          e.preventDefault();
+          primary.click();
+          return;
+        }
+      }
+    }
+    // PIN inputs specifically
+    if(ae&&ae.id==='verifyPinInput'){e.preventDefault();verifySubmit();return;}
+    if(ae&&ae.id==='pinInput'){e.preventDefault();submitPin();return;}
+    if(ae&&(ae.id==='loginEmail'||ae.id==='loginPass')){
+      e.preventDefault();doLogin();return;
+    }
+  }
+
+  // ── Ctrl/Cmd shortcuts ──
+  // Only fire when this tab/window has focus — addEventListener only fires for
+  // the active document, so this naturally won't interfere with other tabs.
+  // isTyping guard prevents shortcuts from firing while typing in app inputs,
+  // but allows them when focus is on the body or non-input elements.
   const tag=document.activeElement?.tagName;
-  const isTyping=tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||document.activeElement?.isContentEditable;
+  const isTyping=tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'
+    ||document.activeElement?.isContentEditable;
+
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey){
     switch(e.key.toLowerCase()){
       case 'k':
-        // Focus search — always intercept so browser doesn't grab it
         e.preventDefault();
-        if(!isTyping){
-          document.getElementById('searchInput')?.focus();
-          document.getElementById('searchInput')?.select();
-        }
+        // Always focus search, even from an input (it's a navigation shortcut)
+        document.getElementById('searchInput')?.focus();
+        document.getElementById('searchInput')?.select();
         break;
       case 't':
-        // New transaction
-        e.preventDefault();
-        if(!isTyping)openTxModal();
+        if(!isTyping){e.preventDefault();openTxModal();}
         break;
       case 'n':
-        // New item (admin only)
-        e.preventDefault();
-        if(!isTyping&&currentRole==='admin')openItemModal();
+        if(!isTyping&&currentRole==='admin'){e.preventDefault();openItemModal();}
         break;
       case 'e':
-        // Export CSV
-        e.preventDefault();
         if(!isTyping&&currentRole==='admin'){
-          const exp=document.querySelector('[onclick*="exportCSV"]');
-          if(exp)exp.click();
+          e.preventDefault();
+          document.querySelector('[onclick*="exportCSV"]')?.click();
         }
         break;
+      // All other Ctrl combinations: do NOT preventDefault — let browser handle them
     }
   }
-}, true)  // ← true = capture phase, fires BEFORE browser default;
+}, true) // ← true = capture phase, fires BEFORE browser default;
 // Click-outside-to-close disabled — use X button to close
 
 
