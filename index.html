@@ -3181,9 +3181,12 @@ document.addEventListener('keydown',e=>{
   // the active document, so this naturally won't interfere with other tabs.
   // isTyping guard prevents shortcuts from firing while typing in app inputs,
   // but allows them when focus is on the body or non-input elements.
-  const tag=document.activeElement?.tagName;
-  const isTyping=tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'
-    ||document.activeElement?.isContentEditable;
+  const ae2=document.activeElement;
+  const tag=ae2?.tagName;
+  // scanLive is a background scanner capture input — not real typing
+  const isScanLive=ae2?.id==='scanLive';
+  const isTyping=!isScanLive&&(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'
+    ||ae2?.isContentEditable);
 
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey){
     switch(e.key.toLowerCase()){
@@ -3194,7 +3197,9 @@ document.addEventListener('keydown',e=>{
         document.getElementById('searchInput')?.select();
         break;
       case 't':
-        if(!isTyping){e.preventDefault();openTxModal();}
+        // Always intercept Ctrl+T — we own this shortcut in the app
+        e.preventDefault();
+        if(!isTyping)openTxModal();
         break;
       case 'n':
         if(!isTyping&&currentRole==='admin'){e.preventDefault();openItemModal();}
