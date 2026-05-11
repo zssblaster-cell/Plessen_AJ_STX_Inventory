@@ -833,6 +833,30 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
 }
 .img-shutter:active{transform:scale(.93)}
 .img-capture-label{font-size:12px;color:rgba(255,255,255,.6);text-align:center}
+
+/* ── SHORTCUT TOOLTIP ── */
+.kb-help{position:relative;flex-shrink:0}
+.kb-help-btn{
+  width:22px;height:22px;border-radius:50%;border:1px solid var(--border);
+  background:var(--surface2);color:var(--text3);font-size:12px;font-weight:700;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .15s;flex-shrink:0;line-height:1;
+}
+.kb-help-btn:hover{background:var(--surface);color:var(--text2);border-color:var(--border2)}
+.kb-tip{
+  position:absolute;right:0;top:calc(100% + 6px);z-index:200;
+  background:var(--text);color:var(--surface);border-radius:var(--rl);
+  padding:10px 13px;min-width:200px;box-shadow:var(--shadow-lg);
+  opacity:0;pointer-events:none;transform:translateY(-4px);
+  transition:opacity .15s,transform .15s;white-space:nowrap;
+}
+.kb-help:hover .kb-tip,.kb-help:focus-within .kb-tip{opacity:1;pointer-events:auto;transform:translateY(0)}
+.kb-tip-row{display:flex;align-items:center;justify-content:space-between;
+  gap:16px;padding:3px 0;font-size:12px}
+.kb-tip-row:not(:last-child){border-bottom:1px solid rgba(255,255,255,.1)}
+.kb-tip-label{color:rgba(255,255,255,.7)}
+.kb-tip-key{font-family:monospace;font-size:11px;background:rgba(255,255,255,.15);
+  border-radius:4px;padding:1px 6px;color:#fff;font-weight:600}
 </style>
 </head>
 <body>
@@ -1019,6 +1043,24 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
       </div>
     </div>
 
+    <!-- KEYBOARD SHORTCUTS BAR -->
+    <div id="shortcut-bar" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+      padding:5px 12px;background:var(--surface2);border:1px solid var(--border);
+      border-radius:var(--r);margin-bottom:8px;font-size:11px;color:var(--text3)">
+      <span style="font-weight:600;color:var(--text3);letter-spacing:.03em">Shortcuts:</span>
+      <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;
+        padding:1px 5px;font-family:monospace;font-size:10px">Ctrl+Q</kbd> New Transaction</span>
+      <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;
+        padding:1px 5px;font-family:monospace;font-size:10px">Ctrl+K</kbd> Search</span>
+      <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;
+        padding:1px 5px;font-family:monospace;font-size:10px">Ctrl+N</kbd> New Item</span>
+      <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;
+        padding:1px 5px;font-family:monospace;font-size:10px">Ctrl+E</kbd> Export</span>
+      <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;
+        padding:1px 5px;font-family:monospace;font-size:10px">Esc</kbd> Close</span>
+      <span style="margin-left:auto;font-size:10px;opacity:.6">Admin-only: Ctrl+N, Ctrl+E</span>
+    </div>
+
     <!-- INVENTORY LIST TAB -->
     <div class="inv-sub-page active" id="inv-page-list">
       <!-- Hidden scanner input (for USB/BT scanners) - moved camera to tx modal -->
@@ -1067,6 +1109,13 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
         </select>
         <select id="perPage" onchange="applyFilters()" style="font-size:12px"><option value="25">25/pg</option><option value="50" selected>50/pg</option><option value="100">100/pg</option><option value="9999">All</option></select>
         <button class="btn btn-s" onclick="exportCSV()">Export</button>
+        <!-- Keyboard shortcut help tooltip -->
+        <div class="kb-help" id="kbHelp">
+          <button class="kb-help-btn" aria-label="Keyboard shortcuts" tabindex="0">?</button>
+          <div class="kb-tip" id="kbTip" role="tooltip">
+            <!-- Populated by updateKbTip() after role is set -->
+          </div>
+        </div>
       </div>
       <div style="overflow-x:auto;border-top:none">
         <div class="th2" style="padding:8px 14px"><span class="th2-t" id="tableInfo">Loading…</span></div>
@@ -3196,8 +3245,8 @@ document.addEventListener('keydown',e=>{
         document.getElementById('searchInput')?.focus();
         document.getElementById('searchInput')?.select();
         break;
-      case 't':
-        // Always intercept Ctrl+T — we own this shortcut in the app
+      case 'q':
+        // Ctrl+Q — open new transaction (Ctrl+T is browser-reserved)
         e.preventDefault();
         if(!isTyping)openTxModal();
         break;
@@ -3386,9 +3435,9 @@ function activateRole(role,tech){
   updateByDisplays();
 
   showPage('inventory');
-  // Always render inventory immediately on role activation
   updateBadges();
   applyFilters();
+  updateKbTip(); // update shortcut tooltip for this role
 }
 
 function updateByDisplays(){
@@ -4145,6 +4194,36 @@ function formatPrice(r){
   if(!lo&&!hi)return'—';
   if(isRange)return`{$${lo.toFixed(2)} — $${hi.toFixed(2)}}`;
   return`$${lo.toFixed(2)}`;
+}
+
+// ═══ SHORTCUT TOOLTIP ═══
+function updateKbTip(){
+  const tip=document.getElementById('kbTip');
+  if(!tip)return;
+
+  // Shortcuts available to everyone
+  const shared=[
+    {key:'Ctrl+Q', label:'New transaction'},
+    {key:'Ctrl+K', label:'Focus search'},
+    {key:'Esc',    label:'Close modal'},
+  ];
+
+  // Admin-only shortcuts
+  const adminOnly=[
+    {key:'Ctrl+N', label:'New item'},
+    {key:'Ctrl+E', label:'Export CSV'},
+  ];
+
+  const rows=currentRole==='admin'
+    ?[...shared,...adminOnly]
+    :shared;
+
+  tip.innerHTML=rows.map(r=>
+    '<div class="kb-tip-row">'+
+      '<span class="kb-tip-label">'+r.label+'</span>'+
+      '<span class="kb-tip-key">'+r.key+'</span>'+
+    '</div>'
+  ).join('');
 }
 // ═══ BOOT ═══
 // Expose functions so Firebase module can call them after data loads
