@@ -2937,7 +2937,7 @@ function txRemSelect(item){
   document.getElementById('tx-rem-form').style.display='';
   document.getElementById('tx-rem-reason').value='';
   document.getElementById('tx-rem-shared-wrap').style.display='none';
-  document.getElementById('tx-rem-qty').value='';
+  document.getElementById('tx-rem-qty').value='1';
   document.getElementById('tx-rem-by').value='';
   document.getElementById('tx-rem-notes').value='';
   txPopulateRemLots(item);
@@ -2967,8 +2967,10 @@ function txSaveRemove(){
   // Tech flow: 1 unit, used for patient, requires verification
   if(currentRole==='tech'){
     const lot=document.getElementById('tx-rem-lot').value;
-    const unit='units';
-    const remData={item:txSelectedItem.item,itemId:txSelectedItem.id,lot,unit};
+    const unit=document.getElementById('tx-rem-unit')?.value||'units';
+    const qty=parseFloat(document.getElementById('tx-rem-qty').value)||1;
+    if(qty<=0){showToast('Quantity must be greater than 0','error');return;}
+    const remData={item:txSelectedItem.item,itemId:txSelectedItem.id,lot,unit,qty};
     openVerifyModal(remData);
     return;
   }
@@ -3622,33 +3624,32 @@ function verifyCancel(){
 }
 
 function completeTechRemoval(data){
-  // data: {item, itemId, lot, unit}
+  // data: {item, itemId, lot, unit, qty}
+  const qty=parseFloat(data.qty)||1;  // use qty from form, default 1
   const idx=inventory.findIndex(r=>r.id===data.itemId);
   if(idx<0){showToast('Item not found','error');return;}
   const r=inventory[idx];
-  // Remove 1 unit from correct lot (FEFO)
   if(data.lot&&r.lotDetails&&r.lotDetails.length){
     const li=r.lotDetails.findIndex(l=>l.lot===data.lot);
     if(li>-1){
       const old=r.lotDetails[li].qty;
-      r.lotDetails[li].qty=Math.max(0,(parseFloat(old)||0)-1);
+      r.lotDetails[li].qty=Math.max(0,(parseFloat(old)||0)-qty);
       syncTotal(r);
       logChange('qty',r.item,'Lot '+data.lot+': '+old+'→'+r.lotDetails[li].qty+' [Used for patient — '+getCurrentUserName()+']');
     }
   } else {
     const old=parseFloat(r.quantity)||0;
-    r.quantity=Math.max(0,old-1);
-    r.reorder=r.quantity===0?'REORDER':'OK';
+    r.quantity=Math.max(0,old-qty);
     syncTotal(r);
     logChange('qty',r.item,'Qty:'+old+'→'+r.quantity+' [Used for patient — '+getCurrentUserName()+']');
   }
   const tx={id:Date.now()+Math.random(),mode:'remove',type:'use',reasonCode:'used_patient',
-    reasonLabel:'Used for patient',item:r.item,qty:1,unit:data.unit||'units',
+    reasonLabel:'Used for patient',item:r.item,qty,unit:data.unit||'units',
     lot:data.lot||'',by:getCurrentUserName(),
     date:new Date().toISOString().slice(0,10),notes:'',ts:new Date().toISOString()};
   transactions.unshift(tx);
   saveAll();closeTxModal();applyFilters();
-  showToast('1 × '+r.item+' removed — Used for patient','warning');
+  showToast(qty+' × '+r.item+' removed — Used for patient','warning');
 }
 
 // ═══ TX MODAL - ROLE-AWARE OPEN ═══
@@ -4021,13 +4022,11 @@ let _pendingImageForSave=null;
 const UNDO_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 
 function canUndoTx(tx) {
-  // Only tech's own "Used for patient" removals, within 30-minute window
   if (!tx || tx.mode !== 'remove') return false;
   if (tx.reversed) return false;
   if (Date.now() - new Date(tx.ts).getTime() > UNDO_WINDOW_MS) return false;
-  // Tech can only undo their own transactions
-  if (currentRole === 'tech' && tx.by !== getCurrentUserName()) return false;
-  // Admin can undo any within window
+  // Both admin and tech can undo any removal within the 30-min window.
+  // (Only one shared tech login exists, so "own transaction" check is not needed.)
   return true;
 }
 
@@ -4053,7 +4052,7 @@ function requireVerifyForUndo(tx) {
   // Show verify modal with custom message
   const verifyInfo = document.getElementById('verifyItemInfo');
   if (verifyInfo) {
-    verifyInfo.textContent = 'Returning 1 × ' + tx.item + ' to stock — not used for patient';
+    verifyInfo.textContent = 'Returning ' + (tx.qty||1) + ' × ' + tx.item + ' to stock — not used for patient';
   }
   verifyContext = data;
   verifyAttempts = 0;
