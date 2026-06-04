@@ -1439,6 +1439,14 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
         </div>
       </div>
     </div>
+    <!-- Lot panel (shown when editing an existing item with lots) -->
+    <div id="itemModalLotSection" style="display:none;margin:0 -1px;padding:14px 16px;background:var(--surface2);border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Lots / Batches</div>
+        <button class="btn btn-s btn-xs" onclick="openLotModal(editId,null)">+ Add Lot</button>
+      </div>
+      <div id="itemModalLotBody"></div>
+    </div>
     <div class="mf"><button class="btn btn-s" onclick="closeItemModal()">Cancel</button><button class="btn btn-p" onclick="saveItem()">Save Item</button></div>
   </div>
 </div>
@@ -1680,22 +1688,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
             <div class="field"><label>Unit</label><select id="tx-rem-unit"><option>units</option><option>vials</option><option>boxes</option><option>bottles</option><option>doses</option><option>mL</option></select></div>
             <div class="field"><label>Performed By</label><input type="text" id="tx-rem-by" placeholder="Staff initials"/></div>
             <div class="field full"><label>Notes</label><input type="text" id="tx-rem-notes" placeholder="Patient ID, chart #, detail…"/></div>
-          </div>
-          <!-- Submit button — always visible to both admin and tech -->
-          <div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-            <button class="btn btn-s" style="flex:1" onclick="txRemClear()">← Back</button>
-            <button class="btn btn-p" style="flex:2;background:var(--danger);color:#fff;font-size:14px;font-weight:700"
-              onclick="txSaveRemove()">
-              Confirm Removal
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
+          </div
 // ═══ CONSTANTS ═══
 const RAW = [
   {reorder:"OK",sku:"",item:"Alcohol Preps Pad",quantity:37,price:0,par:"",category:"Supplies",vendor:"Henry Schein",notes:""},
@@ -2288,7 +2281,21 @@ function rerenderRow(iid){const r=inventory.find(x=>x.id===iid);if(!r)return;con
 
 // ═══ LOT MODAL ═══
 function openLotModal(iid,li){editLotItemId=iid;editLotIdx=li;const r=inventory.find(x=>x.id===iid);document.getElementById('lot-item-name').textContent=r?r.item:'';document.getElementById('lotModalTitle').textContent=li===null?'Receive New Lot':'Edit Lot';if(li!==null&&r.lotDetails&&r.lotDetails[li]){const l=r.lotDetails[li];['lot','qty','expiry','received','vendor','price','notes'].forEach(f=>{const el=document.getElementById('l-'+f);if(el)el.value=l[f]||'';});}else{['l-lot','l-qty','l-expiry','l-vendor','l-price','l-notes'].forEach(x=>document.getElementById(x).value='');document.getElementById('l-received').value=new Date().toISOString().slice(0,10);}document.getElementById('lotModal').classList.add('open');setTimeout(()=>document.getElementById('l-lot').focus(),80);}
-function closeLotModal(){document.getElementById('lotModal').classList.remove('open');editLotItemId=null;editLotIdx=null;}
+function closeLotModal(){
+  document.getElementById('lotModal').classList.remove('open');
+  // Refresh lot section in item modal if it's open
+  const itemModal=document.getElementById('itemModal');
+  if(itemModal&&itemModal.classList.contains('open')&&editId){
+    const r=inventory.find(x=>x.id===editId);
+    const lotBody=document.getElementById('itemModalLotBody');
+    if(r&&lotBody){
+      lotBody.innerHTML=r.lotDetails&&r.lotDetails.length
+        ?renderItemModalLots(r)
+        :'<div style="font-size:12px;color:var(--text3);padding:4px 0">No lots yet. Use the Add Lot button above to receive stock by lot.</div>';
+    }
+  }
+  editLotItemId=null;editLotIdx=null;
+}
 function saveLot(){const lot=document.getElementById('l-lot').value.trim();const qty=parseFloat(document.getElementById('l-qty').value)||0;if(!lot){showToast('Lot # required','error');return;}const r=inventory.find(x=>x.id===editLotItemId);if(!r)return;if(!r.lotDetails)r.lotDetails=[];const data={lot,qty,expiry:document.getElementById('l-expiry').value||'',received:document.getElementById('l-received').value||'',vendor:document.getElementById('l-vendor').value.trim(),price:parseFloat(document.getElementById('l-price').value)||0,notes:document.getElementById('l-notes').value.trim()};if(editLotIdx!==null){const old=r.lotDetails[editLotIdx]||{};const ch=[];if(old.qty!==qty)ch.push(`qty:${old.qty}→${qty}`);if((old.expiry||'')!==data.expiry)ch.push(`exp:${old.expiry||'none'}→${data.expiry||'none'}`);r.lotDetails[editLotIdx]=data;if(ch.length)logChange('edit',r.item,`Lot ${lot}: ${ch.join(', ')}`);showToast('Lot updated','success');}else{r.lotDetails.push(data);if(!r.lotNums)r.lotNums=[];if(data.lot&&!r.lotNums.includes(data.lot))r.lotNums.push(data.lot);logChange('add',r.item,`New lot: ${lot}, qty:${qty}${data.expiry?', exp:'+data.expiry:''}`);transactions.unshift({id:Date.now()+Math.random(),mode:'add',type:'receive',reasonLabel:'Lot received',item:r.item,qty,unit:'units',lot,by:'',date:data.received||new Date().toISOString().slice(0,10),notes:data.notes||'',ts:new Date().toISOString()});showToast('Lot added','success');}syncTotal(r);saveAll();closeLotModal();renderLotPanel(editLotItemId,document.getElementById(`lpanel-${editLotItemId}`));rerenderRow(editLotItemId);updateBadges();}
 
 
@@ -2512,6 +2519,21 @@ function openItemModal(id=null){
   renderTagList('f-lots-display', fLots, 'lot');
   const inactiveChk=document.getElementById('f-inactive');
   if(inactiveChk)inactiveChk.checked=!!(r&&r.inactive);
+  // Populate lot section when editing
+  const lotSection=document.getElementById('itemModalLotSection');
+  const lotBody=document.getElementById('itemModalLotBody');
+  if(lotSection&&lotBody){
+    if(id&&r&&r.lotDetails&&r.lotDetails.length){
+      lotSection.style.display='';
+      lotBody.innerHTML=renderItemModalLots(r);
+    } else if(id) {
+      lotSection.style.display='';
+      lotBody.innerHTML='<div style="font-size:12px;color:var(--text3);padding:4px 0">No lots yet. Use the Add Lot button above to receive stock by lot.</div>';
+    } else {
+      lotSection.style.display='none';
+      lotBody.innerHTML='';
+    }
+  }
   document.getElementById('itemModal').classList.add('open');
   // Load image preview
   loadItemImageIntoModal(id?inventory.find(x=>x.id===id):null);
@@ -3017,7 +3039,7 @@ function getMedSub(name){const n=name.toLowerCase();if(n.includes('lidocaine')||
 function renderOverview(){
   Object.values(aCharts).forEach(c=>{try{c.destroy();}catch(e){}});aCharts={};
   const cat=document.getElementById('ov-cat').value,st=document.getElementById('ov-status').value,vv=(document.getElementById('ov-vendor')||{}).value||'';
-  const all=inventory.filter(r=>r.item&&r.item.trim()&&(!cat||r.category===cat)&&(!st||r.reorder===st)&&(!vv||r.vendor===vv));
+  const all=inventory.filter(r=>r.item&&r.item.trim()&&!r.inactive&&(!cat||r.category===cat)&&(!st||r.reorder===st)&&(!vv||r.vendor===vv));
   const catC={},catV={};
   all.forEach(r=>{if(r.category)catC[r.category]=(catC[r.category]||0)+1;});
   all.forEach(r=>{const v=r.lotDetails&&r.lotDetails.length?r.lotDetails.reduce((s,l)=>(parseFloat(l.qty)||0)*(parseFloat(l.price||r.price)||0)+s,0):(parseFloat(r.quantity)||0)*(parseFloat(r.price)||0);if(r.category&&v>0)catV[r.category]=(catV[r.category]||0)+v;});
@@ -3042,7 +3064,7 @@ function renderOverview(){
 
 function renderRestock(){
   const cat=document.getElementById('rs-cat').value;
-  const items=inventory.filter(r=>r.item&&r.item.trim()&&(!cat||r.category===cat));
+  const items=inventory.filter(r=>r.item&&r.item.trim()&&!r.inactive&&(!cat||r.category===cat));
   const out=items.filter(r=>calcTotal(r)===0);
   const low=items.filter(r=>calcTotal(r)>0&&calcTotal(r)<=2);
   const par=items.filter(r=>r.par&&calcTotal(r)>2&&calcTotal(r)<parseFloat(r.par));
@@ -3058,12 +3080,19 @@ function renderRestock(){
   el.innerHTML=shown.map(r=>{
     const tq=calcTotal(r);const cls=tq===0?'out':tq<=2?'low':'par';
     const status=tq===0?'OUT OF STOCK':tq<=2?`Low — ${tq} remaining`:r.par?`Below PAR level (${r.par})`:'Manually flagged';
-    return`<div class="restock-card ${cls}">
-      <div style="flex:1"><div class="rc-name">${r.item}</div>
-      <div class="rc-meta">${r.category||'—'} · ${r.vendor||'—'}</div>
-      <div class="rc-meta" style="margin-top:2px;font-weight:600;color:${cls==='out'?'var(--danger)':cls==='low'?'var(--warn)':'var(--teal)'}">${status}</div></div>
-      <div style="text-align:right;flex-shrink:0"><div class="rc-qty ${cls}">${tq}</div>
-      <button class="btn btn-p btn-xs" style="margin-top:5px" onclick="openTxModal()"\'")}';showPage('inventory')">+ Add Stock</button></div>
+    const hasLots=r.lotDetails&&r.lotDetails.length>0;
+    const lotsBtn=hasLots?`<button class="btn btn-s btn-xs" style="margin-top:4px;width:100%" onclick="event.stopPropagation();openItemModal(${r.id})">✏ Edit / View Lots</button>`:'';
+    return`<div class="restock-card ${cls}" style="cursor:pointer" onclick="openItemModal(${r.id})">
+      <div style="flex:1">
+        <div class="rc-name" style="text-decoration:underline;text-underline-offset:2px">${r.item}</div>
+        <div class="rc-meta">${r.category||'—'} · ${r.vendor||'—'}</div>
+        <div class="rc-meta" style="margin-top:2px;font-weight:600;color:${cls==='out'?'var(--danger)':cls==='low'?'var(--warn)':'var(--teal)'}">${status}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="rc-qty ${cls}">${tq}</div>
+        <button class="btn btn-p btn-xs" style="margin-top:5px;width:100%;display:block" onclick="event.stopPropagation();openTxModal()">+ Add Stock</button>
+        ${lotsBtn}
+      </div>
     </div>`;}).join('');
 }
 function switchRS(f,el){rsFilter=f;document.querySelectorAll('#sub-restock .pt').forEach(t=>t.classList.remove('active'));el.classList.add('active');renderRestock();}
@@ -3095,9 +3124,9 @@ function renderExpiring(){
     const bdg=d<0?'<span class="eexp">EXPIRED '+Math.abs(d)+'d ago</span>':d<=14?'<span class="eurg">'+d+'d</span>':d<=60?'<span class="esoon">'+d+'d</span>':'<span class="eok">'+d+'d</span>';
     const editFn=e.lotIdx!==null?'openLotModal('+e.id+','+e.lotIdx+')':'openItemModal('+e.id+')';
     const rowCls=d<0?'ee':d<=14?'eu':d<=60?'es':'';
-    return '<tr class="'+rowCls+'"><td>'+bdg+'</td><td><strong>'+e.item+'</strong></td><td><span class="badge cat-'+(e.category||'Other')+'">'+(e.category||'—')+'</span></td><td style="font-family:monospace;font-size:11px">'+e.lot+'</td><td style="font-weight:600">'+e.expiry+'</td><td>'+bdg+'</td><td>'+e.qty+'</td><td><button class="ib e" onclick="'+editFn+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></td></tr>';
+    return '<tr class="'+rowCls+'"><td>'+bdg+'</td><td><strong style="cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="openItemModal('+e.id+')">'+e.item+'</strong></td><td><span class="badge cat-'+(e.category||'Other')+'">'+(e.category||'—')+'</span></td><td style="font-family:monospace;font-size:11px">'+e.lot+'</td><td style="font-weight:600">'+e.expiry+'</td><td>'+bdg+'</td><td>'+e.qty+'</td><td><button class="ib e" onclick="'+editFn+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></td></tr>';
   }).join('');
-  const noExp=inventory.filter(r=>r.category==='Medications'&&r.item&&r.item.trim()&&!r.expiry&&!(r.lotDetails&&r.lotDetails.length));
+  const noExp=inventory.filter(r=>r.category==='Medications'&&r.item&&r.item.trim()&&!r.inactive&&!r.expiry&&!(r.lotDetails&&r.lotDetails.length));
   document.getElementById('noExpList').innerHTML=noExp.length===0
     ?'<p style="font-size:12px;color:var(--okm)">✓ All medications have expiry tracking.</p>'
     :'<div style="display:flex;flex-wrap:wrap;gap:6px">'+noExp.map(r=>'<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;font-size:12px;display:flex;align-items:center;gap:5px">'+r.item+'<button class="ib e" style="width:18px;height:18px" onclick="openItemModal('+r.id+')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>').join('')+'</div>';
@@ -4224,6 +4253,37 @@ function updateKbTip(){
     '</div>'
   ).join('');
 }
+
+function renderItemModalLots(r){
+  if(!r||!r.lotDetails||!r.lotDetails.length)return'';
+  return r.lotDetails.map((l,i)=>{
+    const fefo=getFefo(r.lotDetails);
+    const isFEFO=fefo&&fefo.lot===l.lot;
+    const d=l.expiry?daysLeft(l.expiry):null;
+    const expCls=d===null?'':d<0?'color:var(--danger)':d<=14?'color:var(--danger)':d<=60?'color:var(--warn)':'color:var(--ok-mid)';
+    const expTxt=d===null?'No expiry':d<0?'EXPIRED '+Math.abs(d)+'d ago':d+'d remaining';
+    return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-family:monospace;font-size:12px;font-weight:700">${l.lot||'—'}</span>
+          ${isFEFO?'<span style="font-size:10px;font-weight:700;background:var(--teal);color:#fff;padding:1px 5px;border-radius:8px">USE NEXT</span>':''}
+          ${l.vendor?`<span style="font-size:11px;color:var(--text3)">${l.vendor}</span>`:''}
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">
+          Qty: <strong>${parseFloat(l.qty)||0}</strong>
+          ${l.expiry?`&nbsp;·&nbsp;<span style="${expCls}">${expTxt}</span>`:''}
+          ${l.price?`&nbsp;·&nbsp;$${parseFloat(l.price).toFixed(2)}`:''}
+        </div>
+      </div>
+      <button class="ib e" onclick="openLotModal(${r.id},${i})" title="Edit lot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+      </button>
+    </div>`;
+  }).join('');
+}
 // ═══ BOOT ═══
 // Expose functions so Firebase module can call them after data loads
 window.RAW = RAW;
@@ -4243,6 +4303,23 @@ window.getFefo = getFefo;
 window.findItems = findItems;
 window.findBySku = findBySku;
 // localFallbackBoot: seeds from RAW if Firebase unreachable
+window.localFallbackBoot = function(){
+  if(!window.inventory.length){
+    var seeded=RAW.map(function(r,i){
+      return{id:i+1,item:r.item||'',notes:r.notes||'',expiry:r.expiry||'',
+        skus:r.sku?[r.sku].filter(Boolean):[],
+        lotNums:[],lotDetails:[],quantity:parseFloat(r.quantity)||0,
+        reorder:r.reorder||'OK',price:r.price||0,par:r.par||'',
+        category:r.category||'',vendor:r.vendor||''};
+    });
+    seeded.forEach(function(r){window.inventory.push(r);});
+  }
+  updateBadges();applyFilters();
+};
+
+// ═══ SELECTION ═══
+
+if Firebase unreachable
 window.localFallbackBoot = function(){
   if(!window.inventory.length){
     var seeded=RAW.map(function(r,i){
