@@ -2060,7 +2060,7 @@ function doRefreshAnalytics(){
 function updateBadges(){
   const items=inventory.filter(r=>r.item&&r.item.trim()&&!r.inactive);
   // Restock count
-  const needsR=items.filter(r=>calcTotal(r)===0||(r.par&&calcTotal(r)<=parseFloat(r.par))||r.reorder==='REORDER');
+  const needsR=items.filter(r=>calcTotal(r)===0||(r.par&&calcTotal(r)<parseFloat(r.par))||r.reorder==='REORDER');
   const outN=items.filter(r=>calcTotal(r)===0).length;
   document.getElementById('s-restock').textContent=needsR.length;
   const rsub=document.getElementById('s-restock-sub');
@@ -2125,7 +2125,7 @@ function syncTotal(r){
   const qty=parseFloat(r.quantity)||0;
   const par=parseFloat(r.par)||0;
   if(qty===0)r.reorder='REORDER';
-  else if(par>0&&qty<=par)r.reorder='REORDER';
+  else if(par>0&&qty<par)r.reorder='REORDER';
   else r.reorder='OK';
 }
 function expInline(exp){if(!exp)return'';const d=daysLeft(exp);if(d<0)return'<span class="eexp">EXPIRED</span>';if(d<=14)return`<span class="eurg">${d}d</span>`;if(d<=60)return`<span class="esoon">${d}d</span>`;return`<span class="eok">${exp}</span>`;}
@@ -2565,7 +2565,7 @@ function saveItem(){
       const par=parseFloat(document.getElementById('f-par').value)||0;
       const manual=document.getElementById('f-status').value;
       // If PAR is set, auto-compute; otherwise use manual selection
-      if(par>0)return(qty===0||qty<=par)?'REORDER':'OK';
+      if(par>0)return(qty===0||qty<par)?'REORDER':'OK';
       return manual||'OK';
     })(),
     category:cat,vendor:document.getElementById('f-vendor').value.trim(),
@@ -3045,8 +3045,8 @@ function renderRestock(){
   const items=inventory.filter(r=>r.item&&r.item.trim()&&(!cat||r.category===cat));
   const out=items.filter(r=>calcTotal(r)===0);
   const low=items.filter(r=>calcTotal(r)>0&&calcTotal(r)<=2);
-  const par=items.filter(r=>r.par&&calcTotal(r)>2&&calcTotal(r)<=parseFloat(r.par));
-  const manual=items.filter(r=>r.reorder==='REORDER'&&calcTotal(r)>2&&!(r.par&&calcTotal(r)<=parseFloat(r.par)));
+  const par=items.filter(r=>r.par&&calcTotal(r)>2&&calcTotal(r)<parseFloat(r.par));
+  const manual=items.filter(r=>r.reorder==='REORDER'&&calcTotal(r)>2&&!(r.par&&calcTotal(r)<parseFloat(r.par)));
   document.getElementById('rsStats').innerHTML=`
     <div class="sc sd"><div class="sl">Out of Stock</div><div class="sv cd">${out.length}</div></div>
     <div class="sc sw"><div class="sl">Low (≤2)</div><div class="sv cw">${low.length}</div></div>
