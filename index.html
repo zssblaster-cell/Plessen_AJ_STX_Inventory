@@ -116,14 +116,18 @@ function fbLoad(){
           if(window.activateRole)window.activateRole('admin',null);
         } else if(email==='examuser@plesseneye.com'){
           if(window.activateRole)window.activateRole('tech',null);
-        } else {
-          if(window.showRoleScreen)window.showRoleScreen();
-        }
+        } else { if(window.activateRole)window.activateRole("tech",null); }
       }).catch(function(){
-        if(window.showRoleScreen)window.showRoleScreen();
+        // Config load failed — route by email anyway
+        var em=window._authEmail||'';
+        if(em==='anthony.jolly@plesseneye.com'){if(window.activateRole)window.activateRole('admin',null);}
+        else if(em==='examuser@plesseneye.com'){if(window.activateRole)window.activateRole('tech',null);}
       });
     }).catch(function(){
-      if(window.showRoleScreen)window.showRoleScreen();
+      // Config doc fetch failed — route by email anyway
+      var em=window._authEmail||'';
+      if(em==='anthony.jolly@plesseneye.com'){if(window.activateRole)window.activateRole('admin',null);}
+      else if(em==='examuser@plesseneye.com'){if(window.activateRole)window.activateRole('tech',null);}
     });
     // Listeners
     db.doc('plessen/inventory').onSnapshot(function(snap){
@@ -1695,10 +1699,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
               <select id="tx-rem-lot"><option value="">— Not specified —</option></select>
             </div>
             <div class="field"><label>Quantity <span class="req-star">*</span></label><input type="number" id="tx-rem-qty" min="0" step="1" placeholder="0"/></div>
-            <div class="field"><label>Unit</label><select id="tx-rem-unit"><option>units</option><option>vials</option><option>boxes</option><option>bottles</option><option>doses</option><option>mL</option></select></div>
-            <div class="field"><label>Performed By</label><input type="text" id="tx-rem-by" placeholder="Staff initials"/></div>
-            <div class="field full"><label>Notes</label><input type="text" id="tx-rem-notes" placeholder="Patient ID, chart #, detail…"/></div>
-          </div>
+            <div class="field"><label>Unit</label><select id="tx-rem-unit"><option value="units">Units</option><option value="vials">Vials</option><option value="doses">Doses</option><option value="mL">mL</option><option value="tablets">Tablets</option></select></div>
         </div>
       </div>
     </div>
@@ -2846,7 +2847,6 @@ function renderOverview(){
   const catC={};all.forEach(r=>{if(r.category)catC[r.category]=(catC[r.category]||0)+1;});
   const statusC={'OK':0,'REORDER':0};all.forEach(r=>{statusC[r.reorder]=(statusC[r.reorder]||0)+1;});
   const totalVal=all.reduce((s,r)=>s+calcTotal(r)*(parseFloat(r.price)||0),0);
-  totalVal=all.reduce((s,r)=>s+calcTotal(r)*(parseFloat(r.price)||0),0);
   const ov=document.getElementById('ovContent');
   if(!ov)return;
   ov.innerHTML=`
@@ -3159,6 +3159,21 @@ function showSub(id){
 function goRestock(){showPage('analytics');showSub('restock');}
 function goExpiring(){showPage('analytics');showSub('expiring');}
 function goChangelog(){showPage('changelog');document.getElementById('inv-tab-changelog')&&showInvTab('changelog');}
+function doRefreshAnalytics(){
+  const active=document.querySelector('.sub-page.active');if(!active)return;
+  const id=active.id.replace('sub-','');
+  if(id==='overview')renderOverview();
+  else if(id==='restock')renderRestock();
+  else if(id==='expiring')renderExpiring();
+  else if(id==='trends')renderTrends();
+  else if(id==='savings')renderSavings();
+}
+function submitPin(){if(window.submitTechPin)window.submitTechPin();}
+
+
+function submitPin(){if(window.submitTechPin)window.submitTechPin();}
+
+
 function doRefreshAnalytics(){
   const active=document.querySelector('.sub-page.active');if(!active)return;
   const id=active.id.replace('sub-','');
