@@ -2940,18 +2940,39 @@ function renderExpiring(){
 
 function renderTrends(){
   Object.values(aCharts).forEach(c=>{try{c.destroy();}catch(e){}});aCharts={};
-  const el=document.getElementById('trends-body');if(!el)return;
-  const recent=transactions.filter(t=>new Date(t.ts).getTime()>Date.now()-30*86400000);
-  const byItem={};recent.forEach(t=>{if(!byItem[t.item])byItem[t.item]={name:t.item,removed:0,added:0};if(t.mode==='remove')byItem[t.item].removed+=parseFloat(t.qty)||1;else byItem[t.item].added+=parseFloat(t.qty)||1;});
+  const el=document.getElementById('trContent');if(!el)return;
+  const trDays=window._trDays||30;
+  const trCat=document.getElementById('tr-cat')?.value||'';
+  const trType=document.getElementById('tr-type')?.value||'';
+  const cutoff=trDays===9999?0:Date.now()-trDays*86400000;
+  const recent=transactions.filter(t=>{
+    if(cutoff>0&&new Date(t.ts).getTime()<cutoff)return false;
+    if(trCat&&inventory.find(r=>r.item===t.item)?.category!==trCat)return false;
+    if(trType&&t.mode!==trType)return false;
+    return true;
+  });
+  const byItem={};recent.forEach(t=>{
+    if(!byItem[t.item])byItem[t.item]={name:t.item,removed:0,added:0};
+    if(t.mode==='remove')byItem[t.item].removed+=parseFloat(t.qty)||1;
+    else byItem[t.item].added+=parseFloat(t.qty)||1;
+  });
   const sorted=Object.values(byItem).sort((a,b)=>b.removed-a.removed);
-  el.innerHTML=sorted.length?sorted.slice(0,15).map(r=>`<tr><td><strong>${escH(r.name)}</strong></td><td style="color:var(--danger);font-weight:600">${r.removed}</td><td style="color:var(--ok-mid);font-weight:600">${r.added}</td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">No transactions in the last 30 days</td></tr>';
+  el.innerHTML='<table style="width:100%"><thead><tr><th>Item</th><th style="width:80px;color:var(--danger)">Used</th><th style="width:80px;color:var(--ok-mid)">Added</th></tr></thead><tbody>'
+    +(sorted.length?sorted.slice(0,20).map(r=>'<tr><td><strong>'+escH(r.name)+'</strong></td><td style="color:var(--danger);font-weight:600;text-align:center">'+r.removed+'</td><td style="color:var(--ok-mid);font-weight:600;text-align:center">'+r.added+'</td></tr>').join('')
+    :'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">No transactions in this period.</td></tr>')
+    +'</tbody></table>';
 }
 
 function renderSavings(){
-  const el=document.getElementById('savings-body');if(!el)return;
+  const el=document.getElementById('savContent');if(!el)return;
+  el.innerHTML='';
   const waste=transactions.filter(t=>t.type==='waste');
   const byReason={};waste.forEach(t=>{if(!byReason[t.reasonLabel])byReason[t.reasonLabel]={label:t.reasonLabel,count:0,qty:0};byReason[t.reasonLabel].count++;byReason[t.reasonLabel].qty+=parseFloat(t.qty)||1;});
-  el.innerHTML=Object.values(byReason).length?Object.values(byReason).map(r=>`<tr><td>${escH(r.label)}</td><td>${r.count}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">No waste recorded</td></tr>';
+  const rows=Object.values(byReason);
+  el.innerHTML='<table style="width:100%"><thead><tr><th>Reason</th><th style="width:70px">Events</th><th style="width:70px">Units</th></tr></thead><tbody>'
+    +(rows.length?rows.map(r=>'<tr><td>'+escH(r.label)+'</td><td style="text-align:center">'+r.count+'</td><td style="text-align:center">'+r.qty+'</td></tr>').join('')
+    :'<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">No waste or disposal events recorded.</td></tr>')
+    +'</tbody></table>';
 }
 
 // ═══ EXPORT ═══
@@ -2966,7 +2987,10 @@ function exportCSV(){
 // ═══ SETTINGS ═══
 let settingsTechIdx=null;
 function openSettings(){
-  if(currentRole!=='admin'){showToast('Admin access required','error');return;}
+  if(currentRole!=='admin'){
+    console.log('[Settings] currentRole=',currentRole,'— blocked');
+    showToast('Admin access required','error');return;
+  }
   renderTechList();
   ['s-admin-pin-current','s-admin-pin-new','s-admin-pin-confirm'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('s-admin-pin-err').textContent='';
@@ -3096,13 +3120,15 @@ function renderChangelog(){
       +'</tr>';
   }).join('');
 }
+
+function switchTR(days,el){window._trDays=days;document.querySelectorAll('#trPeriodTabs .pt').forEach(b=>b.classList.remove('active'));if(el)el.classList.add('active');renderTrends();}
 // ═══ BOOT ═══
 window.activateRole=function(role,tech){
   currentRole=role;currentTech=tech;
   const ls=document.getElementById('loginScreen'),ma=document.getElementById('mainApp');
   if(ls)ls.style.display='none';if(ma)ma.style.display='';
   const badge=document.getElementById('roleBadge');
-  if(badge){badge.textContent=(role==='admin'?'🔑 Admin':'👤 '+(tech?tech.name:'Staff'));badge.className='rb '+(role==='admin'?'rb-a':'rb-t');}
+  if(badge){badge.textContent=(role==='admin'?'🔑 Admin':'👤 '+(tech?tech.name:'Staff'));badge.className='rb '+(role==='admin'?'rb-a':'rb-t');badge.style.display='flex';}
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=role==='admin'?'':'none');
   document.querySelectorAll('.tech-only').forEach(el=>el.style.display=role==='tech'?'':'none');
   const logoutBtn=document.getElementById('logoutBtn');if(logoutBtn)logoutBtn.style.display='';
