@@ -1697,7 +1697,15 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
             <div class="field"><label>Quantity <span class="req-star">*</span></label><input type="number" id="tx-rem-qty" min="0" step="1" placeholder="0"/></div>
             <div class="field"><label>Unit</label><select id="tx-rem-unit"><option>units</option><option>vials</option><option>boxes</option><option>bottles</option><option>doses</option><option>mL</option></select></div>
             <div class="field"><label>Performed By</label><input type="text" id="tx-rem-by" placeholder="Staff initials"/></div>
-            <div class="field full"><label>Notes</label><input type="text" i
+            <div class="field full"><label>Notes</label><input type="text" id="tx-rem-notes" placeholder="Patient ID, chart #, detail…"/></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
 // ═══ CONSTANTS ═══
 const RAW = [
   {reorder:"OK",sku:"",item:"Alcohol Preps Pad",quantity:37,price:0,par:"",category:"Supplies",vendor:"Henry Schein",notes:""},
@@ -2315,8 +2323,6 @@ function thSort(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}ap
 function applySortSel(){const[col,dir]=document.getElementById('sortSel').value.split('|');sortCol=col;sortDir=parseInt(dir);applyFilters();}
 function syncCbAll(){const s=(currentPage-1)*perPage,pg=filtered.slice(s,s+perPage),cb=document.getElementById('cbAll');if(!cb)return;cb.checked=pg.length>0&&pg.every(r=>selectedIds.has(r.id));cb.indeterminate=!cb.checked&&pg.some(r=>selectedIds.has(r.id));}
 
-
-// ═══ SELECTION ═══
 
 // ═══ SELECTION ═══
 function toggleSel(id,c){c?selectedIds.add(id):selectedIds.delete(id);updBB();syncCbAll();}
@@ -3127,9 +3133,6 @@ function doRefreshAnalytics(){
 function submitPin(){if(window.submitTechPin)window.submitTechPin();}
 
 
-if(id==='trends')renderTrends();
-  else if(id==='savings')renderSavings();
-}
 function submitPin(){if(window.submitTechPin)window.submitTechPin();}
 
 
