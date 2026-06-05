@@ -2826,9 +2826,37 @@ function renderOverview(){
   const catC={};all.forEach(r=>{if(r.category)catC[r.category]=(catC[r.category]||0)+1;});
   const statusC={'OK':0,'REORDER':0};all.forEach(r=>{statusC[r.reorder]=(statusC[r.reorder]||0)+1;});
   const totalVal=all.reduce((s,r)=>s+calcTotal(r)*(parseFloat(r.price)||0),0);
-  const ov=document.getElementById('ov-stats');
-  if(ov)ov.innerHTML=`<div class="sc"><div class="sl">Active Items</div><div class="sv">${all.length}</div></div><div class="sc st"><div class="sl">Need Restock</div><div class="sv ct">${statusC['REORDER']||0}</div></div><div class="sc"><div class="sl">Total Value</div><div class="sv">$${totalVal.toFixed(2)}</div></div><div class="sc"><div class="sl">Categories</div><div class="sv">${Object.keys(catC).length}</div></div>`;
-  ['chart-cat','chart-status'].forEach(id=>{const el=document.getElementById(id);if(!el)return;const ctx=el.getContext('2d');const isStatus=id==='chart-status';const labels=isStatus?Object.keys(statusC):Object.keys(catC);const data=isStatus?Object.values(statusC):Object.values(catC);if(!labels.length)return;aCharts[id]=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:['#1a5fb4','#b91c1c','#059669','#b45309','#7c3aed','#0891b2','#065f46'],borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'right',labels:{font:{size:11}}}}}});});
+  totalVal=all.reduce((s,r)=>s+calcTotal(r)*(parseFloat(r.price)||0),0);
+  const ov=document.getElementById('ovContent');
+  if(!ov)return;
+  ov.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:14px">
+      <div class="sc"><div class="sl">Active Items</div><div class="sv">${all.length}</div></div>
+      <div class="sc" style="border-color:var(--danger)"><div class="sl">Need Restock</div><div class="sv" style="color:var(--danger)">${statusC['REORDER']||0}</div></div>
+      <div class="sc"><div class="sl">Total Value</div><div class="sv">$${totalVal.toFixed(2)}</div></div>
+      <div class="sc"><div class="sl">Categories</div><div class="sv">${Object.keys(catC).length}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--text2)">By Category</div>
+        <canvas id="chart-cat" style="max-height:200px"></canvas>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--text2)">By Status</div>
+        <canvas id="chart-status" style="max-height:200px"></canvas>
+      </div>
+    </div>`;
+  requestAnimationFrame(()=>{
+    ['chart-cat','chart-status'].forEach(id=>{
+      const el=document.getElementById(id);if(!el)return;
+      const ctx=el.getContext('2d');
+      const isStatus=id==='chart-status';
+      const labels=isStatus?Object.keys(statusC):Object.keys(catC);
+      const data=isStatus?Object.values(statusC):Object.values(catC);
+      if(!labels.length)return;
+      aCharts[id]=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:['#1a5fb4','#b91c1c','#059669','#b45309','#7c3aed','#0891b2','#065f46'],borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'right',labels:{font:{size:11}}}}}});
+    });
+  });
 }
 
 function getMedSub(){
@@ -2838,6 +2866,7 @@ function getMedSub(){
 
 
 function setRsFilter(f){rsFilter=f;document.querySelectorAll('.rs-filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.filter===f));renderRestock();}
+function switchRS(f,el){rsFilter=f;document.querySelectorAll('.pt').forEach(b=>b.classList.remove('active'));if(el)el.classList.add('active');renderRestock();}
 function renderRestock(){
   const cat=document.getElementById('rs-cat')?.value||'';
   const items=inventory.filter(r=>r.item&&r.item.trim()&&!r.inactive&&(!cat||r.category===cat));
@@ -3010,6 +3039,21 @@ document.addEventListener('keydown',e=>{
   }
 },true);
 
+
+function renderChangelog(){
+  const body=document.getElementById('clBody');if(!body)return;
+  const q=document.getElementById('cl-search')?.value.toLowerCase()||'';
+  const entries=[...(window.changeLog||changeLog)].filter(e=>!q||e.item.toLowerCase().includes(q)||(e.detail||'').toLowerCase().includes(q)||(e.type||'').toLowerCase().includes(q));
+  entries.sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+  if(!entries.length){body.innerHTML='<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text3)">No changes recorded yet.</td></tr>';return;}
+  body.innerHTML=entries.slice(0,200).map(e=>{
+    const d=new Date(e.ts);
+    const ts=d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    const typeLabel={'add':'Added','edit':'Edited','del':'Deleted','qty':'Qty Change'}[e.type]||e.type||'Change';
+    const typeCls={'add':'tx-add','edit':'tx-note','del':'tx-remove','qty':'tx-note'}[e.type]||'tx-note';
+    return`<tr><td><span class="${typeCls}">${typeLabel}</span></td><td><strong>${escH(e.item||'')}</strong></td><td style="font-size:12px;color:var(--text2)">${escH(e.detail||'')}</td><td style="font-size:11px;color:var(--text3)">${ts}</td></tr>`;
+  }).join('');
+}
 // ═══ BOOT ═══
 window.activateRole=function(role,tech){
   currentRole=role;currentTech=tech;
