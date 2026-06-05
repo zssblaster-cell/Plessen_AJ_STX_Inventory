@@ -1297,7 +1297,17 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
     <span class="clfb" onclick="clFilt('qty',this)">Qty Changed</span>
     <span class="clfb" onclick="clFilt('del',this)">Deleted</span>
   </div>
-  <div class="tw"><div id="clBody" style="padding:4px 14px;max-height:68vh;overflow-y:auto"></div></div>
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th style="width:90px">Type</th>
+        <th>Item</th>
+        <th>Detail</th>
+        <th style="width:110px">Time</th>
+      </tr></thead>
+      <tbody id="clBody"></tbody>
+    </table>
+  </div>
 </div>
 
 </div><!-- /wrap -->
@@ -1687,15 +1697,7 @@ tr.eu td{background:#fff1f1}tr.ee td{background:#fee2e2}tr.es td{background:#fff
             <div class="field"><label>Quantity <span class="req-star">*</span></label><input type="number" id="tx-rem-qty" min="0" step="1" placeholder="0"/></div>
             <div class="field"><label>Unit</label><select id="tx-rem-unit"><option>units</option><option>vials</option><option>boxes</option><option>bottles</option><option>doses</option><option>mL</option></select></div>
             <div class="field"><label>Performed By</label><input type="text" id="tx-rem-by" placeholder="Staff initials"/></div>
-            <div class="field full"><label>Notes</label><input type="text" id="tx-rem-notes" placeholder="Patient ID, chart #, detail…"/></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
+            <div class="field full"><label>Notes</label><input type="text" i
 // ═══ CONSTANTS ═══
 const RAW = [
   {reorder:"OK",sku:"",item:"Alcohol Preps Pad",quantity:37,price:0,par:"",category:"Supplies",vendor:"Henry Schein",notes:""},
@@ -2871,7 +2873,7 @@ function renderRestock(){
   const cat=document.getElementById('rs-cat')?.value||'';
   const items=inventory.filter(r=>r.item&&r.item.trim()&&!r.inactive&&(!cat||r.category===cat));
   const out=items.filter(r=>calcTotal(r)===0);
-  const low=items.filter(r=>calcTotal(r)>0&&calcTotal(r)<=2);
+  const low=items.filter(r=>!r.par&&calcTotal(r)>0&&calcTotal(r)<=2);
   const par=items.filter(r=>r.par&&calcTotal(r)>2&&calcTotal(r)<parseFloat(r.par));
   const manual=items.filter(r=>r.reorder==='REORDER'&&calcTotal(r)>2&&!(r.par&&calcTotal(r)<parseFloat(r.par)));
   const rsStats=document.getElementById('rsStats');
@@ -2880,8 +2882,8 @@ function renderRestock(){
   const el=document.getElementById('rsContent');if(!el)return;
   if(!shown.length){el.innerHTML='<div class="empty" style="grid-column:1/-1">No items need restocking.</div>';return;}
   el.innerHTML=shown.map(r=>{
-    const tq=calcTotal(r),cls=tq===0?'out':tq<=2?'low':'par';
-    const status=tq===0?'OUT OF STOCK':tq<=2?`Low — ${tq} remaining`:r.par?`Below PAR level (${r.par})`:'Manually flagged';
+    const tq=calcTotal(r),cls=tq===0?'out':(r.par&&tq<parseFloat(r.par))?'par':tq<=2?'low':'par';
+    const status=tq===0?'OUT OF STOCK':(r.par&&tq<parseFloat(r.par))?`Below PAR (${r.par}) — ${tq} remaining`:tq<=2?`Low — ${tq} remaining`:'Manually flagged';
     const hasLots=r.lotDetails&&r.lotDetails.length>0;
     const lotsBtn=hasLots?`<button class="btn btn-s btn-xs" style="margin-top:4px;width:100%" onclick="event.stopPropagation();openItemModal(${r.id})">✏ Edit / View Lots</button>`:'';
     return`<div class="restock-card ${cls}" style="cursor:pointer" onclick="openItemModal(${r.id})"><div style="flex:1"><div class="rc-name" style="text-decoration:underline;text-underline-offset:2px">${escH(r.item)}</div><div class="rc-meta">${r.category||'—'} · ${r.vendor||'—'}</div><div class="rc-meta" style="margin-top:2px;font-weight:600;color:${cls==='out'?'var(--danger)':cls==='low'?'var(--warn)':'var(--teal)'}">${status}</div></div><div style="text-align:right;flex-shrink:0"><div class="rc-qty ${cls}">${tq}</div><button class="btn btn-p btn-xs" style="margin-top:5px;width:100%;display:block" onclick="event.stopPropagation();openTxModal()">+ Add Stock</button>${lotsBtn}</div></div>`;
@@ -3040,18 +3042,40 @@ document.addEventListener('keydown',e=>{
 },true);
 
 
+let clTypeFilter='all';
+function clFilt(type,el){
+  clTypeFilter=type;
+  document.querySelectorAll('.clfb').forEach(b=>b.classList.remove('active'));
+  if(el)el.classList.add('active');
+  renderChangelog();
+}
 function renderChangelog(){
   const body=document.getElementById('clBody');if(!body)return;
-  const q=document.getElementById('cl-search')?.value.toLowerCase()||'';
-  const entries=[...(window.changeLog||changeLog)].filter(e=>!q||e.item.toLowerCase().includes(q)||(e.detail||'').toLowerCase().includes(q)||(e.type||'').toLowerCase().includes(q));
+  const days=parseInt(document.getElementById('cl-date-filter')?.value||'9999');
+  const cutoff=days===9999?0:Date.now()-days*86400000;
+  let entries=[...(window.changeLog||changeLog)];
+  // Date filter
+  if(cutoff>0)entries=entries.filter(e=>new Date(e.ts).getTime()>=cutoff);
+  // Type filter
+  if(clTypeFilter&&clTypeFilter!=='all')entries=entries.filter(e=>e.type===clTypeFilter);
   entries.sort((a,b)=>new Date(b.ts)-new Date(a.ts));
-  if(!entries.length){body.innerHTML='<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text3)">No changes recorded yet.</td></tr>';return;}
-  body.innerHTML=entries.slice(0,200).map(e=>{
+  if(!entries.length){
+    body.innerHTML='<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text3)">No changes recorded for this filter.</td></tr>';
+    return;
+  }
+  const typeLabel={'add':'Added','edit':'Edited','del':'Deleted','qty':'Qty Change'};
+  const typeCls={'add':'tx-add','edit':'tx-note','del':'tx-remove','qty':'tx-note'};
+  body.innerHTML=entries.slice(0,300).map(e=>{
     const d=new Date(e.ts);
     const ts=d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    const typeLabel={'add':'Added','edit':'Edited','del':'Deleted','qty':'Qty Change'}[e.type]||e.type||'Change';
-    const typeCls={'add':'tx-add','edit':'tx-note','del':'tx-remove','qty':'tx-note'}[e.type]||'tx-note';
-    return`<tr><td><span class="${typeCls}">${typeLabel}</span></td><td><strong>${escH(e.item||'')}</strong></td><td style="font-size:12px;color:var(--text2)">${escH(e.detail||'')}</td><td style="font-size:11px;color:var(--text3)">${ts}</td></tr>`;
+    const lbl=typeLabel[e.type]||e.type||'Change';
+    const cls=typeCls[e.type]||'tx-note';
+    return '<tr>'
+      +'<td><span class="'+cls+'">'+lbl+'</span></td>'
+      +'<td><strong>'+escH(e.item||'')+'</strong></td>'
+      +'<td style="font-size:12px;color:var(--text2)">'+escH(e.detail||'')+'</td>'
+      +'<td style="font-size:11px;color:var(--text3)">'+ts+'</td>'
+      +'</tr>';
   }).join('');
 }
 // ═══ BOOT ═══
@@ -3098,6 +3122,12 @@ function doRefreshAnalytics(){
   else if(id==='restock')renderRestock();
   else if(id==='expiring')renderExpiring();
   else if(id==='trends')renderTrends();
+  else if(id==='savings')renderSavings();
+}
+function submitPin(){if(window.submitTechPin)window.submitTechPin();}
+
+
+if(id==='trends')renderTrends();
   else if(id==='savings')renderSavings();
 }
 function submitPin(){if(window.submitTechPin)window.submitTechPin();}
