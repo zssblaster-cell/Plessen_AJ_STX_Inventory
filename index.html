@@ -1902,6 +1902,18 @@ let fSkus=[], fLots=[], txNewSkus=[];
 let currentRole=null;   // 'admin' or 'tech'
 let currentTech=null;   // {name, pin, badgeId, pinHash} for logged-in tech
 let appConfig={adminPinHash:'',techs:[]};  // loaded from Firestore
+// applyConfig: called by Firebase block after loading plessen/config
+window.applyConfig = function(cfg){
+  appConfig.adminPinHash = cfg.adminPinHash||'';
+  appConfig.techs        = cfg.techs||[];
+  return Promise.resolve();
+};
+// fbSaveConfig: called by settings when PIN or techs change
+window.fbSaveConfig = function(cfg){
+  appConfig.adminPinHash = cfg.adminPinHash||'';
+  appConfig.techs        = cfg.techs||[];
+  if(window.fbSave) window.fbSave();
+};
 let pinContext=null;    // what the pin modal is doing: 'admin'|'tech'
 let verifyContext=null; // pending removal after verification
 let verifyMode='pin';   // 'pin' or 'scan'
