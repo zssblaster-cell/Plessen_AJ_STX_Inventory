@@ -2422,10 +2422,11 @@ function saveItem(){
   const item=document.getElementById('f-item').value.trim();
   if(!item){showToast('Item name required','error');return;}
   const existingRecord=editId?inventory.find(x=>x.id===editId):null;
-  // Barcode uniqueness check
+  // Barcode uniqueness check — skip the item currently being edited
   for(const sku of fSkus){
     if(!sku)continue;
-    const conflict=inventory.find(r=>r.id!==(editId||0)&&getSkus(r).some(s=>s.toLowerCase()===sku.toLowerCase()));
+    // Use == not !== so string/number id mismatch doesn't cause false positives
+    const conflict=inventory.find(r=>r.id!=editId&&getSkus(r).some(s=>s.toLowerCase()===sku.toLowerCase()));
     if(conflict){showToast('Barcode "'+sku+'" already used by "'+conflict.item+'"','error');return;}
   }
   const cat=document.getElementById('f-cat').value;
