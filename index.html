@@ -1915,6 +1915,14 @@ window.fbSaveConfig = function(cfg){
   appConfig.techs        = cfg.techs||[];
   if(window.fbSave) window.fbSave();
 };
+function showToast(msg,type){
+  const el=document.getElementById('toast');
+  if(!el)return;
+  el.textContent=msg;
+  el.className='toast show'+(type?' '+type:'');
+  setTimeout(()=>el.classList.remove('show'),3200);
+}
+
 let pinContext=null;    // what the pin modal is doing: 'admin'|'tech'
 let verifyContext=null; // pending removal after verification
 let verifyMode='pin';   // 'pin' or 'scan'
