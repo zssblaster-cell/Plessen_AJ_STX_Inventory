@@ -2629,22 +2629,42 @@ function completeUndoTransaction(data){
 
 function openTxModal(prefilledSku){
   txSelectedItem=null;
-  document.getElementById('txModal').style.display='flex';
+  const modal=document.getElementById('txModal');
+  if(modal)modal.classList.add('open');
+  // Also support style-based display for backwards compatibility
+  if(modal&&modal.style)modal.style.display='flex';
   setTxMode('remove');
+  txRemClear();
   const rs=document.getElementById('tx-rem-search');
   if(prefilledSku&&rs){rs.value=prefilledSku;txRemSearch(prefilledSku);}
   else if(rs)setTimeout(()=>{rs.value='';rs.focus();},80);
 }
-function closeTxModal(){document.getElementById('txModal').style.display='none';txSelectedItem=null;txRemClear();}
+function closeTxModal(){
+  const modal=document.getElementById('txModal');
+  if(modal){modal.style.display='none';modal.classList.remove('open');}
+  txSelectedItem=null;txRemClear();
+  stopTxCam();
+}
 function setTxMode(mode){
   txMode=mode;
-  ['add','remove'].forEach(m=>{
-    const btn=document.getElementById('tx-mode-'+m);
-    if(btn)btn.classList.toggle('active',m===mode);
-  });
-  const addS=document.getElementById('tx-add-section'),remS=document.getElementById('tx-rem-section');
+  // Mode toggle buttons (HTML uses txModeAdd / txModeRem)
+  const addBtn=document.getElementById('txModeAdd')||document.getElementById('tx-mode-add');
+  const remBtn=document.getElementById('txModeRem')||document.getElementById('tx-mode-remove');
+  if(addBtn)addBtn.classList.toggle('active',mode==='add');
+  if(remBtn)remBtn.classList.toggle('active',mode==='remove');
+  // Flow sections (HTML uses tx-add-flow / tx-rem-flow)
+  const addS=document.getElementById('tx-add-flow')||document.getElementById('tx-add-section');
+  const remS=document.getElementById('tx-rem-flow')||document.getElementById('tx-rem-section');
   if(addS)addS.style.display=mode==='add'?'':'none';
   if(remS)remS.style.display=mode==='remove'?'':'none';
+  // Focus the right search field
+  if(mode==='remove'){
+    const rs=document.getElementById('tx-rem-search');
+    if(rs)setTimeout(()=>rs.focus(),80);
+  } else {
+    const as=document.getElementById('tx-add-search');
+    if(as)setTimeout(()=>as.focus(),80);
+  }
 }
 function txRemSearch(val){
   clearTimeout(_txRemTO);
